@@ -9,7 +9,7 @@ async function facebookCommand(sock, chatId, message) {
         
         if (!url) {
             return await sock.sendMessage(chatId, { 
-                text: "Please provide a Facebook video URL.\nExample: .fb https://www.facebook.com/..."
+                text: "Please provide a Facebook video or photo post URL.\nExample: .fb https://www.facebook.com/..."
             }, { quoted: message });
         }
 
@@ -25,16 +25,45 @@ async function facebookCommand(sock, chatId, message) {
             react: { text: '🔄', key: message.key }
         });
 
-        // Resolve share/short URLs to their final destination first
+        // Resolve share/short URLs to their final destination first, and inspect
+        // the post's OG tags to tell a photo post from a video post. Facebook
+        // tags many photo posts as og:type "video.other" too, so the presence
+        // of an actual og:video tag (not og:type) is what we key off of.
         let resolvedUrl = url;
+        let ogVideoUrl = null;
+        let ogImages = [];
+        let ogTitle = null;
         try {
             const res = await axios.get(url, { timeout: 20000, maxRedirects: 10, headers: { 'User-Agent': 'Mozilla/5.0' } });
             const possible = res?.request?.res?.responseUrl;
             if (possible && typeof possible === 'string') {
                 resolvedUrl = possible;
             }
+
+            const html = typeof res.data === 'string' ? res.data : '';
+            const videoMatch = html.match(/property="og:video(?::secure_url)?" content="([^"]+)"/);
+            if (videoMatch) ogVideoUrl = videoMatch[1].replace(/&amp;/g, '&');
+
+            const titleMatch = html.match(/property="og:title" content="([^"]+)"/);
+            if (titleMatch) ogTitle = titleMatch[1];
+
+            ogImages = [...html.matchAll(/property="og:image" content="([^"]+)"/g)].map(m => m[1].replace(/&amp;/g, '&'));
         } catch {
             // ignore resolution errors; use original url
+        }
+
+        // Photo post: no og:video tag but has og:image(s) - send the photo(s)
+        // directly instead of running the video-download API chain, which
+        // otherwise returns an unrelated random video for non-video posts.
+        if (!ogVideoUrl && ogImages.length > 0) {
+            const caption = ogTitle ? `𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗗 𝗕𝗬 𝗞𝗡𝗜𝗚𝗛𝗧-𝗕𝗢𝗧\n\n📝 Title: ${ogTitle}` : "𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗗 𝗕𝗬 𝗞𝗡𝗜𝗚𝗛𝗧-𝗕𝗢𝗧";
+            for (let i = 0; i < ogImages.length; i++) {
+                await sock.sendMessage(chatId, {
+                    image: { url: ogImages[i] },
+                    caption: i === ogImages.length - 1 ? caption : undefined
+                }, { quoted: message });
+            }
+            return;
         }
 
         // Use Siputzx API
