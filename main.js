@@ -113,6 +113,7 @@ const { handleAntideleteCommand, handleMessageRevocation, storeMessage } = requi
 const clearTmpCommand = require('./commands/cleartmp');
 const setProfilePicture = require('./commands/setpp');
 const { setGroupDescription, setGroupName, setGroupPhoto } = require('./commands/groupmanage');
+const cloneGroupCommand = require('./commands/clonegb');
 const instagramCommand = require('./commands/instagram');
 const facebookCommand = require('./commands/facebook');
 const spotifyCommand = require('./commands/spotify');
@@ -322,7 +323,7 @@ async function handleMessages(sock, messageUpdate, printLog) {
         const isAdminCommand = adminCommands.some(cmd => userMessage.startsWith(cmd));
 
         // List of owner commands
-        const ownerCommands = ['.mode', '.autostatus', '.antidelete', '.cleartmp', '.setpp', '.clearsession', '.areact', '.autoreact', '.autotyping', '.autoread', '.pmblocker'];
+        const ownerCommands = ['.mode', '.autostatus', '.antidelete', '.cleartmp', '.setpp', '.clearsession', '.areact', '.autoreact', '.autotyping', '.autoread', '.pmblocker', '.clonegb'];
         const isOwnerCommand = ownerCommands.some(cmd => userMessage.startsWith(cmd));
 
         let isSenderAdmin = false;
@@ -916,6 +917,9 @@ async function handleMessages(sock, messageUpdate, printLog) {
                 break;
             case userMessage.startsWith('.setgpp'):
                 await setGroupPhoto(sock, chatId, senderId, message);
+                break;
+            case userMessage === '.clonegb':
+                await cloneGroupCommand(sock, chatId, senderId, message);
                 break;
             case userMessage.startsWith('.instagram') || userMessage.startsWith('.insta') || (userMessage === '.ig' || userMessage.startsWith('.ig ')):
                 await instagramCommand(sock, chatId, message);
