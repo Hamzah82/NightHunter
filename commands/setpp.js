@@ -1,8 +1,32 @@
-const fs = require('fs');
-const path = require('path');
 const sharp = require('sharp');
-const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+const { downloadContentFromMessage, jidNormalizedUser, S_WHATSAPP_NET } = require('@whiskeysockets/baileys');
 const isOwnerOrSudo = require('../lib/isOwner');
+
+// Baileys' own updateProfilePicture() forces a 1:1 center-crop via
+// generateProfilePicture(). Bypass it entirely and send the "w:profile:picture"
+// IQ stanza ourselves with the untouched image, so the full aspect ratio is kept.
+async function uploadProfilePicture(sock, jid, imgBuffer) {
+    const targetJid = jidNormalizedUser(jid) !== jidNormalizedUser(sock.authState.creds.me.id)
+        ? jidNormalizedUser(jid)
+        : undefined;
+
+    await sock.query({
+        tag: 'iq',
+        attrs: {
+            to: S_WHATSAPP_NET,
+            type: 'set',
+            xmlns: 'w:profile:picture',
+            ...(targetJid ? { target: targetJid } : {})
+        },
+        content: [
+            {
+                tag: 'picture',
+                attrs: { type: 'image' },
+                content: imgBuffer
+            }
+        ]
+    });
+}
 
 async function setProfilePicture(sock, chatId, msg) {
     try {
@@ -34,42 +58,22 @@ async function setProfilePicture(sock, chatId, msg) {
             return;
         }
 
-        // Create tmp directory if it doesn't exist
-        const tmpDir = path.join(process.cwd(), 'tmp');
-        if (!fs.existsSync(tmpDir)) {
-            fs.mkdirSync(tmpDir, { recursive: true });
-        }
-
         // Download the image
         const stream = await downloadContentFromMessage(imageMessage, 'image');
         let buffer = Buffer.from([]);
-        
+
         for await (const chunk of stream) {
             buffer = Buffer.concat([buffer, chunk]);
         }
 
-        const imagePath = path.join(tmpDir, `profile_${Date.now()}.jpg`);
+        // Re-encode to JPEG only, no resize/crop, so the full original image
+        // (whatever its aspect ratio) is kept intact
+        const jpegBuffer = await sharp(buffer).jpeg({ quality: 90 }).toBuffer();
 
-        // Pad the image to a square canvas instead of letting WhatsApp/Baileys
-        // center-crop it to 1:1, so the full original image stays visible
-        const paddedBuffer = await sharp(buffer)
-            .resize(640, 640, {
-                fit: 'contain',
-                background: { r: 255, g: 255, b: 255, alpha: 1 }
-            })
-            .jpeg()
-            .toBuffer();
+        // Upload directly, bypassing Baileys' built-in 1:1 crop
+        await uploadProfilePicture(sock, sock.user.id, jpegBuffer);
 
-        // Save the image
-        fs.writeFileSync(imagePath, paddedBuffer);
-
-        // Set the profile picture
-        await sock.updateProfilePicture(sock.user.id, { url: imagePath });
-
-        // Clean up the temporary file
-        fs.unlinkSync(imagePath);
-
-        await sock.sendMessage(chatId, { 
+        await sock.sendMessage(chatId, {
             text: '✅ Successfully updated bot profile picture!' 
         });
 
