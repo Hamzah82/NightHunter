@@ -187,8 +187,16 @@ async function handleMessages(sock, messageUpdate, printLog) {
             return;
         }
 
-        const chatId = message.key.remoteJid;
-        const senderId = message.key.participant || message.key.remoteJid;
+        // Baileys v7 addresses some DMs by LID. Sends to a LID can be rejected
+        // by the server (async status 0, no exception) when its mapping is
+        // stale, while the phone-number JID for the same person keeps working.
+        // Prefer the PN alias for DM replies — WhatsApp merges both into the
+        // same chat on the phone.
+        let chatId = message.key.remoteJid;
+        if (chatId.endsWith('@lid') && message.key.remoteJidAlt) {
+            chatId = message.key.remoteJidAlt;
+        }
+        const senderId = message.key.participant || chatId;
         const isGroup = chatId.endsWith('@g.us');
         const senderIsSudo = await isSudo(senderId);
         const senderIsOwnerOrSudo = await isOwnerOrSudo(senderId, sock, chatId);
@@ -233,7 +241,7 @@ async function handleMessages(sock, messageUpdate, printLog) {
 
         // Only log command usage
         if (userMessage.startsWith('.')) {
-            console.log(`📝 Command used in ${isGroup ? 'group' : 'private'}: ${userMessage}`);
+            console.log(`📝 Command used in ${isGroup ? 'group' : 'private'}: ${userMessage} [chat: ${chatId}]`);
         }
         // Read bot mode once; don't early-return so moderation can still run in private mode
         let isPublic = true;

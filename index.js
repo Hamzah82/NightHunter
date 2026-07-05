@@ -122,6 +122,25 @@ async function startXeonBotInc() {
         // Save credentials when they update
         XeonBotInc.ev.on('creds.update', saveCreds)
 
+        // Surface silent send failures: the server can reject an outgoing
+        // message asynchronously (ack with an error code, e.g. 463 = account
+        // restricted / reachout timelock) — sendMessage resolves fine and the
+        // only trace is a messages.update with status ERROR(0).
+        XeonBotInc.ev.on('messages.update', updates => {
+            for (const u of updates) {
+                if (u.key?.fromMe && u.update?.status === 0) {
+                    console.log(`⚠️ send rejected by server -> ${u.key.remoteJid} | id: ${u.key.id} | reason: ${JSON.stringify(u.update.messageStubParameters || [])}`)
+                }
+            }
+        })
+        // When a 463 lands, Baileys queries the restriction details and emits
+        // them here — log so the owner can see how long the timelock lasts
+        XeonBotInc.ev.on('connection.update', (u) => {
+            if (u.reachoutTimeLock?.isActive) {
+                console.log(`⏳ WhatsApp account restricted (reachout timelock) until: ${u.reachoutTimeLock.timeEnforcementEnds || 'unknown'}`)
+            }
+        })
+
     store.bind(XeonBotInc.ev)
 
     // Message handling
