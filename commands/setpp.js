@@ -1,41 +1,40 @@
+const fs = require('fs');
+const path = require('path');
 const sharp = require('sharp');
-const { downloadContentFromMessage, jidNormalizedUser, S_WHATSAPP_NET } = require('@whiskeysockets/baileys');
+const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
 const isOwnerOrSudo = require('../lib/isOwner');
 
-// Baileys' own updateProfilePicture() forces a 1:1 center-crop via
-// generateProfilePicture(). Bypass it entirely and send the "w:profile:picture"
-// IQ stanza ourselves with the untouched image, so the full aspect ratio is kept.
-async function uploadProfilePicture(sock, jid, imgBuffer) {
-    const targetJid = jidNormalizedUser(jid) !== jidNormalizedUser(sock.authState.creds.me.id)
-        ? jidNormalizedUser(jid)
-        : undefined;
+const SIZE = 640;
 
-    await sock.query({
-        tag: 'iq',
-        attrs: {
-            to: S_WHATSAPP_NET,
-            type: 'set',
-            xmlns: 'w:profile:picture',
-            ...(targetJid ? { target: targetJid } : {})
-        },
-        content: [
-            {
-                tag: 'picture',
-                attrs: { type: 'image' },
-                content: imgBuffer
-            }
-        ]
-    });
+// WhatsApp's server rejects non-square profile pictures outright (406
+// not-acceptable) — a 1:1 canvas is mandatory, it's not just a Baileys quirk.
+// To avoid cropping the original image, fit it fully inside the square and
+// fill the leftover space with a blurred, zoomed copy of the same image
+// instead of a plain background color.
+async function squareWithBlurredBackdrop(buffer) {
+    const backdrop = await sharp(buffer)
+        .resize(SIZE, SIZE, { fit: 'cover' })
+        .blur(20)
+        .toBuffer();
+
+    const foreground = await sharp(buffer)
+        .resize(SIZE, SIZE, { fit: 'inside' })
+        .toBuffer();
+
+    return sharp(backdrop)
+        .composite([{ input: foreground, gravity: 'center' }])
+        .jpeg({ quality: 90 })
+        .toBuffer();
 }
 
 async function setProfilePicture(sock, chatId, msg) {
     try {
         const senderId = msg.key.participant || msg.key.remoteJid;
         const isOwner = await isOwnerOrSudo(senderId, sock, chatId);
-        
+
         if (!msg.key.fromMe && !isOwner) {
-            await sock.sendMessage(chatId, { 
-                text: '❌ This command is only available for the owner!' 
+            await sock.sendMessage(chatId, {
+                text: '❌ This command is only available for the owner!'
             });
             return;
         }
@@ -43,8 +42,8 @@ async function setProfilePicture(sock, chatId, msg) {
         // Check if message is a reply
         const quotedMessage = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
         if (!quotedMessage) {
-            await sock.sendMessage(chatId, { 
-                text: '⚠️ Please reply to an image with the .setpp command!' 
+            await sock.sendMessage(chatId, {
+                text: '⚠️ Please reply to an image with the .setpp command!'
             });
             return;
         }
@@ -52,10 +51,16 @@ async function setProfilePicture(sock, chatId, msg) {
         // Check if quoted message contains an image
         const imageMessage = quotedMessage.imageMessage || quotedMessage.stickerMessage;
         if (!imageMessage) {
-            await sock.sendMessage(chatId, { 
-                text: '❌ The replied message must contain an image!' 
+            await sock.sendMessage(chatId, {
+                text: '❌ The replied message must contain an image!'
             });
             return;
+        }
+
+        // Create tmp directory if it doesn't exist
+        const tmpDir = path.join(process.cwd(), 'tmp');
+        if (!fs.existsSync(tmpDir)) {
+            fs.mkdirSync(tmpDir, { recursive: true });
         }
 
         // Download the image
@@ -66,23 +71,26 @@ async function setProfilePicture(sock, chatId, msg) {
             buffer = Buffer.concat([buffer, chunk]);
         }
 
-        // Re-encode to JPEG only, no resize/crop, so the full original image
-        // (whatever its aspect ratio) is kept intact
-        const jpegBuffer = await sharp(buffer).jpeg({ quality: 90 }).toBuffer();
+        const squaredBuffer = await squareWithBlurredBackdrop(buffer);
 
-        // Upload directly, bypassing Baileys' built-in 1:1 crop
-        await uploadProfilePicture(sock, sock.user.id, jpegBuffer);
+        const imagePath = path.join(tmpDir, `profile_${Date.now()}.jpg`);
+        fs.writeFileSync(imagePath, squaredBuffer);
+
+        // Image is already 640x640, so Baileys' internal crop is a no-op here
+        await sock.updateProfilePicture(sock.user.id, { url: imagePath });
+
+        fs.unlinkSync(imagePath);
 
         await sock.sendMessage(chatId, {
-            text: '✅ Successfully updated bot profile picture!' 
+            text: '✅ Successfully updated bot profile picture!'
         });
 
     } catch (error) {
         console.error('Error in setpp command:', error);
-        await sock.sendMessage(chatId, { 
-            text: '❌ Failed to update profile picture!' 
+        await sock.sendMessage(chatId, {
+            text: '❌ Failed to update profile picture!'
         });
     }
 }
 
-module.exports = setProfilePicture; 
+module.exports = setProfilePicture;
