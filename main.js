@@ -142,6 +142,7 @@ const { reminiCommand } = require('./commands/remini');
 const { igsCommand } = require('./commands/igs');
 const { anticallCommand, readState: readAnticallState } = require('./commands/anticall');
 const { pmblockerCommand, readState: readPmBlockerState } = require('./commands/pmblocker');
+const { blocklistCommand, unblockCommand } = require('./commands/blocklist');
 const settingsCommand = require('./commands/settings');
 const soraCommand = require('./commands/sora');
 
@@ -324,7 +325,7 @@ async function handleMessages(sock, messageUpdate, printLog) {
         const isAdminCommand = adminCommands.some(cmd => userMessage.startsWith(cmd));
 
         // List of owner commands
-        const ownerCommands = ['.mode', '.autostatus', '.antidelete', '.cleartmp', '.setpp', '.clearsession', '.areact', '.autoreact', '.autotyping', '.autoread', '.pmblocker', '.clonegb', '.save', '.get', '.notes'];
+        const ownerCommands = ['.mode', '.autostatus', '.antidelete', '.cleartmp', '.setpp', '.clearsession', '.areact', '.autoreact', '.autotyping', '.autoread', '.pmblocker', '.clonegb', '.save', '.get', '.notes', '.blocklist', '.unblock'];
         const isOwnerCommand = ownerCommands.some(cmd => userMessage.startsWith(cmd));
 
         let isSenderAdmin = false;
@@ -513,6 +514,15 @@ async function handleMessages(sock, messageUpdate, printLog) {
                     await pmblockerCommand(sock, chatId, message, args);
                 }
                 commandExecuted = true;
+                break;
+            case userMessage.startsWith('.blocklist'):
+                await blocklistCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('.unblock'):
+                {
+                    const unblockArg = rawText.slice(8).trim();
+                    await unblockCommand(sock, chatId, message, unblockArg);
+                }
                 break;
             case userMessage === '.owner':
                 await ownerCommand(sock, chatId);

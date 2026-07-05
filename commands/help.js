@@ -90,6 +90,9 @@ async function helpCommand(sock, chatId, message) {
 ║ ➤ .notes list
 ║ ➤ .notes del <judul>
 ║ ➤ .notes clear
+║ ➤ .anticall <on/off/status>
+║ ➤ .blocklist
+║ ➤ .unblock <nomor>
 ╚═══════════════════╝
 
 ╔═══════════════════╗
