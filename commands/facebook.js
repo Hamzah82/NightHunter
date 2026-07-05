@@ -29,33 +29,64 @@ async function facebookCommand(sock, chatId, message) {
         // the post's OG tags to tell a photo post from a video post. Facebook
         // tags many photo posts as og:type "video.other" too, so the presence
         // of an actual og:video tag (not og:type) is what we key off of.
+        //
+        // Facebook also serves a stripped-down "no_js"/bot-check interstitial
+        // to non-browser clients sometimes, which only carries og:title/
+        // og:description (no og:image, no og:video at all) - that page is
+        // handled naturally below since it never satisfies ogImages.length>0.
+        //
+        // Tag lookup tolerates either attribute order (property before/after
+        // content) and matches og:video, og:video:url and og:video:secure_url,
+        // since Facebook doesn't consistently emit the same variant for every
+        // video post type.
+        function extractOg(html, propAlt) {
+            const re1 = new RegExp(`<meta[^>]*property=["'](?:${propAlt})["'][^>]*content=["']([^"']+)["']`, 'i');
+            const re2 = new RegExp(`<meta[^>]*content=["']([^"']+)["'][^>]*property=["'](?:${propAlt})["']`, 'i');
+            const m = html.match(re1) || html.match(re2);
+            return m ? m[1].replace(/&amp;/g, '&') : null;
+        }
+        function extractOgAll(html, propAlt) {
+            const re1 = new RegExp(`<meta[^>]*property=["'](?:${propAlt})["'][^>]*content=["']([^"']+)["']`, 'gi');
+            const re2 = new RegExp(`<meta[^>]*content=["']([^"']+)["'][^>]*property=["'](?:${propAlt})["']`, 'gi');
+            const out = [];
+            for (const m of html.matchAll(re1)) out.push(m[1]);
+            for (const m of html.matchAll(re2)) out.push(m[1]);
+            return out.map(s => s.replace(/&amp;/g, '&'));
+        }
+
         let resolvedUrl = url;
         let ogVideoUrl = null;
         let ogImages = [];
         let ogTitle = null;
-        try {
-            const res = await axios.get(url, { timeout: 20000, maxRedirects: 10, headers: { 'User-Agent': 'Mozilla/5.0' } });
-            const possible = res?.request?.res?.responseUrl;
-            if (possible && typeof possible === 'string') {
-                resolvedUrl = possible;
+        for (let attempt = 0; attempt < 2 && !ogVideoUrl && ogImages.length === 0; attempt++) {
+            try {
+                const res = await axios.get(url, { timeout: 20000, maxRedirects: 10, headers: { 'User-Agent': 'Mozilla/5.0' } });
+                const possible = res?.request?.res?.responseUrl;
+                if (possible && typeof possible === 'string') {
+                    resolvedUrl = possible;
+                }
+
+                const html = typeof res.data === 'string' ? res.data : '';
+                ogVideoUrl = extractOg(html, 'og:video:secure_url|og:video:url|og:video');
+                ogTitle = extractOg(html, 'og:title');
+                ogImages = [...new Set(extractOgAll(html, 'og:image:secure_url|og:image:url|og:image'))];
+            } catch {
+                // ignore resolution errors; use original url / retry
             }
-
-            const html = typeof res.data === 'string' ? res.data : '';
-            const videoMatch = html.match(/property="og:video(?::secure_url)?" content="([^"]+)"/);
-            if (videoMatch) ogVideoUrl = videoMatch[1].replace(/&amp;/g, '&');
-
-            const titleMatch = html.match(/property="og:title" content="([^"]+)"/);
-            if (titleMatch) ogTitle = titleMatch[1];
-
-            ogImages = [...html.matchAll(/property="og:image" content="([^"]+)"/g)].map(m => m[1].replace(/&amp;/g, '&'));
-        } catch {
-            // ignore resolution errors; use original url
         }
+
+        // Reels never carry an og:video tag in their static HTML at all (it's
+        // pure JS/GraphQL-rendered), so absence of og:video is meaningless for
+        // them - only trust the photo heuristic when the URL isn't shaped like
+        // a video/reel link in the first place. Facebook's own share links
+        // encode this too: /share/v/... is a video/reel share.
+        const looksLikeVideoUrl = /\/share\/v\/|\/reels?\/|\/videos?\/|\/watch(\/|\?|$)/i.test(url) ||
+            /\/reels?\/|\/videos?\/|\/watch(\/|\?|$)/i.test(resolvedUrl);
 
         // Photo post: no og:video tag but has og:image(s) - send the photo(s)
         // directly instead of running the video-download API chain, which
         // otherwise returns an unrelated random video for non-video posts.
-        if (!ogVideoUrl && ogImages.length > 0) {
+        if (!ogVideoUrl && ogImages.length > 0 && !looksLikeVideoUrl) {
             const caption = ogTitle ? `𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗗 𝗕𝗬 𝗞𝗡𝗜𝗚𝗛𝗧-𝗕𝗢𝗧\n\n📝 Title: ${ogTitle}` : "𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗗 𝗕𝗬 𝗞𝗡𝗜𝗚𝗛𝗧-𝗕𝗢𝗧";
             for (let i = 0; i < ogImages.length; i++) {
                 await sock.sendMessage(chatId, {
