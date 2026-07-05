@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const sharp = require('sharp');
 const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
 const isOwnerOrSudo = require('../lib/isOwner');
 
@@ -48,9 +49,19 @@ async function setProfilePicture(sock, chatId, msg) {
         }
 
         const imagePath = path.join(tmpDir, `profile_${Date.now()}.jpg`);
-        
+
+        // Pad the image to a square canvas instead of letting WhatsApp/Baileys
+        // center-crop it to 1:1, so the full original image stays visible
+        const paddedBuffer = await sharp(buffer)
+            .resize(640, 640, {
+                fit: 'contain',
+                background: { r: 255, g: 255, b: 255, alpha: 1 }
+            })
+            .jpeg()
+            .toBuffer();
+
         // Save the image
-        fs.writeFileSync(imagePath, buffer);
+        fs.writeFileSync(imagePath, paddedBuffer);
 
         // Set the profile picture
         await sock.updateProfilePicture(sock.user.id, { url: imagePath });
