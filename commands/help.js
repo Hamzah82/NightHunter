@@ -30,7 +30,7 @@ async function helpCommand(sock, chatId, message) {
 ║ ➤ .8ball <question>
 ║ ➤ .groupinfo
 ║ ➤ .staff or .admins 
-║ ➤ .vv
+║ ➤ .take <reply to view-once/status>
 ║ ➤ .trt <text> <lang>
 ║ ➤ .ss <link>
 ║ ➤ .jid
@@ -96,7 +96,7 @@ async function helpCommand(sock, chatId, message) {
 ║ ➤ .crop <reply to image>
 ║ ➤ .tgsticker <Link>
 ║ ➤ .meme
-║ ➤ .take <packname> 
+║ ➤ .repack <packname>
 ║ ➤ .emojimix <emj1>+<emj2>
 ║ ➤ .igs <insta link>
 ║ ➤ .igsc <insta link>
