@@ -1,6 +1,17 @@
-function toJid(input) {
-    const digits = input.replace(/[^0-9]/g, '');
+// Blocklist entries can be @lid JIDs; unblocking needs the exact stored JID
+// (converting the bare digits to @s.whatsapp.net fails with "Unable to
+// resolve LID for PN JID" when the entry was blocked under its LID), so
+// match the typed digits against the live blocklist first.
+async function resolveBlockedJid(sock, input) {
+    const digits = (input || '').replace(/[^0-9]/g, '');
     if (!digits) return null;
+    try {
+        const blocked = await sock.fetchBlocklist() || [];
+        const match = blocked.find(jid => jid.split('@')[0].split(':')[0] === digits);
+        if (match) return match;
+    } catch (err) {
+        console.error('resolveBlockedJid fetch error:', err);
+    }
     return `${digits}@s.whatsapp.net`;
 }
 
@@ -25,7 +36,7 @@ async function unblockCommand(sock, chatId, message, arg) {
     const mentioned = contextInfo?.mentionedJid?.[0];
     const quotedParticipant = contextInfo?.participant;
 
-    let targetJid = mentioned || quotedParticipant || toJid((arg || '').trim());
+    let targetJid = mentioned || quotedParticipant || await resolveBlockedJid(sock, (arg || '').trim());
 
     if (!targetJid) {
         return sock.sendMessage(chatId, {
