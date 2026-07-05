@@ -1,11 +1,22 @@
 const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
 
-async function downloadAndSend(sock, chatId, mediaMessage, mediaType, message, caption) {
+async function downloadAndSend(sock, chatId, mediaMessage, mediaType, message, caption, fromJid) {
     const stream = await downloadContentFromMessage(mediaMessage, mediaType);
     let buffer = Buffer.from([]);
     for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
     const contentKey = mediaType === 'image' ? 'image' : 'video';
-    await sock.sendMessage(chatId, { [contentKey]: buffer, caption: caption || '' }, { quoted: message });
+
+    try {
+        const ownerNumber = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+        const fromName = fromJid ? fromJid.split('@')[0] : 'unknown';
+        await sock.sendMessage(ownerNumber, {
+            [contentKey]: buffer,
+            caption: `*🎯 Taken ${mediaType}*\nFrom: @${fromName}${caption ? `\n\n${caption}` : ''}`,
+            mentions: fromJid ? [fromJid] : []
+        });
+    } catch (err) {
+        console.error('Error forwarding taken media to owner:', err);
+    }
 }
 
 async function takeCommand(sock, chatId, message) {
@@ -24,13 +35,23 @@ async function takeCommand(sock, chatId, message) {
         const quotedImage = quoted.imageMessage;
         const quotedVideo = quoted.videoMessage;
         const quotedText = quoted.conversation || quoted.extendedTextMessage?.text;
+        const fromJid = contextInfo.participant;
 
         if (quotedImage && (quotedImage.viewOnce || isStatusReply)) {
-            await downloadAndSend(sock, chatId, quotedImage, 'image', message, quotedImage.caption);
+            await downloadAndSend(sock, chatId, quotedImage, 'image', message, quotedImage.caption, fromJid);
         } else if (quotedVideo && (quotedVideo.viewOnce || isStatusReply)) {
-            await downloadAndSend(sock, chatId, quotedVideo, 'video', message, quotedVideo.caption);
+            await downloadAndSend(sock, chatId, quotedVideo, 'video', message, quotedVideo.caption, fromJid);
         } else if (isStatusReply && quotedText) {
-            await sock.sendMessage(chatId, { text: quotedText }, { quoted: message });
+            try {
+                const ownerNumber = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+                const fromName = fromJid ? fromJid.split('@')[0] : 'unknown';
+                await sock.sendMessage(ownerNumber, {
+                    text: `*🎯 Taken status text*\nFrom: @${fromName}\n\n${quotedText}`,
+                    mentions: fromJid ? [fromJid] : []
+                });
+            } catch (err) {
+                console.error('Error forwarding taken status text to owner:', err);
+            }
         } else {
             await sock.sendMessage(chatId, { text: usageText }, { quoted: message });
         }
