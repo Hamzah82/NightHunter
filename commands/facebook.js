@@ -37,10 +37,10 @@ async function facebookCommand(sock, chatId, message) {
             // ignore resolution errors; use original url
         }
 
-        // Use Hanggts API
+        // Use Siputzx API
         async function fetchFromApi(u) {
-            const apiUrl = `https://api.hanggts.xyz/download/facebook?url=${encodeURIComponent(u)}`;
-            
+            const apiUrl = `https://api.siputzx.my.id/api/d/facebook?url=${encodeURIComponent(u)}`;
+
             try {
                 const response = await axios.get(apiUrl, {
                     timeout: 20000,
@@ -51,22 +51,22 @@ async function facebookCommand(sock, chatId, message) {
                     maxRedirects: 5,
                     validateStatus: s => s >= 200 && s < 500
                 });
-                
+
                 if (response.data) {
                     // Accept response if status is true, or if response has data/result/url fields
-                    if (response.data.status === true || 
-                        response.data.result || 
-                        response.data.data || 
-                        response.data.url || 
-                        response.data.download || 
+                    if (response.data.status === true ||
+                        response.data.result ||
+                        response.data.data ||
+                        response.data.url ||
+                        response.data.download ||
                         response.data.video) {
-                        return { response, apiName: 'Hanggts API' };
+                        return { response, apiName: 'Siputzx API' };
                     }
                 }
             } catch (error) {
-                console.error(`Hanggts API failed: ${error.message}`);
+                console.error(`Siputzx API failed: ${error.message}`);
             }
-            throw new Error('Hanggts API failed');
+            throw new Error('Siputzx API failed');
         }
 
         // Try resolved URL, then fallback to original URL
@@ -116,7 +116,13 @@ async function facebookCommand(sock, chatId, message) {
             }
             
             if (!fbvid && data.data) {
-                if (typeof data.data === 'object' && data.data.url) {
+                if (Array.isArray(data.data.downloads) && data.data.downloads.length > 0) {
+                    // Siputzx API format: data.data.downloads[].{quality, type, url}
+                    const hd = data.data.downloads.find(item => /hd/i.test(item.quality || '') && item.type === 'video');
+                    const sd = data.data.downloads.find(item => /sd/i.test(item.quality || '') && item.type === 'video');
+                    fbvid = hd?.url || sd?.url || data.data.downloads.find(item => item.type === 'video')?.url || data.data.downloads[0]?.url;
+                    title = data.data.title || data.title || "Facebook Video";
+                } else if (typeof data.data === 'object' && data.data.url) {
                     fbvid = data.data.url;
                     title = data.data.title || data.data.caption || data.title || "Facebook Video";
                 } else if (typeof data.data === 'string' && data.data.startsWith('http')) {
