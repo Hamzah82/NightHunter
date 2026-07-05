@@ -57,11 +57,23 @@ async function tiktokCommand(sock, chatId, message) {
             react: { text: '🔄', key: message.key }
         });
 
+        // Resolve vt./vm.tiktok.com short links to their canonical
+        // www.tiktok.com/@user/video/<id> form first - the Siputzx API
+        // returns "All nodes failed" when given the raw short link.
+        let resolvedUrl = url;
+        try {
+            const redirectRes = await axios.get(url, { timeout: 15000, maxRedirects: 10, headers: { 'User-Agent': 'Mozilla/5.0' } });
+            const possible = redirectRes?.request?.res?.responseUrl;
+            if (possible && typeof possible === 'string') {
+                resolvedUrl = possible;
+            }
+        } catch {
+            // ignore resolution errors; use original url
+        }
+
         try {
             // Use only Siputzx API
-            const apiUrl = `https://api.siputzx.my.id/api/d/tiktok?url=${encodeURIComponent(url)}`;
-
-
+            const apiUrl = `https://api.siputzx.my.id/api/d/tiktok?url=${encodeURIComponent(resolvedUrl)}`;
 
             let videoUrl = null;
             let audioUrl = null;
@@ -69,36 +81,26 @@ async function tiktokCommand(sock, chatId, message) {
 
             // Call Siputzx API
             try {
-                const response = await axios.get(apiUrl, { 
+                const response = await axios.get(apiUrl, {
                     timeout: 15000,
                     headers: {
                         'accept': '*/*',
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
                     }
                 });
-                
-                if (response.data && response.data.status) {
-                    // Check if the API returned video data
-                    if (response.data.data) {
-                        // Check for urls array first (this is the main response format)
-                        if (response.data.data.urls && Array.isArray(response.data.data.urls) && response.data.data.urls.length > 0) {
-                            // Use the first URL from the urls array (usually HD quality)
-                            videoUrl = response.data.data.urls[0];
-                            title = response.data.data.metadata?.title || "TikTok Video";
-                        } else if (response.data.data.video_url) {
-                            videoUrl = response.data.data.video_url;
-                            title = response.data.data.metadata?.title || "TikTok Video";
-                        } else if (response.data.data.url) {
-                            videoUrl = response.data.data.url;
-                            title = response.data.data.metadata?.title || "TikTok Video";
-                        } else if (response.data.data.download_url) {
-                            videoUrl = response.data.data.download_url;
-                            title = response.data.data.metadata?.title || "TikTok Video";
-                        } else {
-                            throw new Error("No video URL found in Siputzx API response");
-                        }
+
+                if (response.data && response.data.status && response.data.data) {
+                    // Siputzx API format: data.media[].{quality: 'HD'|'SD', url, backup, type}
+                    // `backup` is a direct CDN proxy link; `url` for HD entries points to a
+                    // slow/unreliable third-party resolver, so prefer `backup` when present.
+                    const media = response.data.data.media;
+                    if (Array.isArray(media) && media.length > 0) {
+                        const hd = media.find(m => m.quality === 'HD');
+                        const sd = media.find(m => m.quality === 'SD');
+                        videoUrl = hd?.backup || hd?.url || sd?.backup || sd?.url || media[0]?.backup || media[0]?.url;
+                        title = response.data.data.title || "TikTok Video";
                     } else {
-                        throw new Error("No data field in Siputzx API response");
+                        throw new Error("No media found in Siputzx API response");
                     }
                 } else {
                     throw new Error("Invalid Siputzx API response");
@@ -110,7 +112,7 @@ async function tiktokCommand(sock, chatId, message) {
             // If Siputzx API didn't work, try the original ttdl method
             if (!videoUrl) {
                 try {
-                    let downloadData = await ttdl(url);
+                    let downloadData = await ttdl(resolvedUrl);
                     if (downloadData && downloadData.data && downloadData.data.length > 0) {
                         const mediaData = downloadData.data;
                         for (let i = 0; i < Math.min(20, mediaData.length); i++) {
