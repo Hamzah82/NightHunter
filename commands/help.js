@@ -85,6 +85,11 @@ async function helpCommand(sock, chatId, message) {
 ║ ➤ .pmblocker setmsg <text>
 ║ ➤ .setmention <reply to msg>
 ║ ➤ .mention <on/off>
+║ ➤ .save <judul> <reply pesan>
+║ ➤ .get <judul>
+║ ➤ .notes list
+║ ➤ .notes del <judul>
+║ ➤ .notes clear
 ╚═══════════════════╝
 
 ╔═══════════════════╗

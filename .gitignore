@@ -11,6 +11,7 @@ session/
 
 # Bot runtime/state data (phone numbers, sudo lists, message counts, etc.)
 data/*.json
+data/saved_media/
 baileys_store.json
 
 # Environment variables

@@ -91,6 +91,7 @@ const { handleAntiBadwordCommand, handleBadwordDetection } = require('./lib/anti
 const antibadwordCommand = require('./commands/antibadword');
 const { handleChatbotCommand, handleChatbotResponse } = require('./commands/chatbot');
 const takeCommand = require('./commands/take');
+const { saveCommand, getCommand, notesCommand } = require('./commands/save');
 const repackCommand = require('./commands/repack');
 const { flirtCommand } = require('./commands/flirt');
 const characterCommand = require('./commands/character');
@@ -323,7 +324,7 @@ async function handleMessages(sock, messageUpdate, printLog) {
         const isAdminCommand = adminCommands.some(cmd => userMessage.startsWith(cmd));
 
         // List of owner commands
-        const ownerCommands = ['.mode', '.autostatus', '.antidelete', '.cleartmp', '.setpp', '.clearsession', '.areact', '.autoreact', '.autotyping', '.autoread', '.pmblocker', '.clonegb'];
+        const ownerCommands = ['.mode', '.autostatus', '.antidelete', '.cleartmp', '.setpp', '.clearsession', '.areact', '.autoreact', '.autotyping', '.autoread', '.pmblocker', '.clonegb', '.save', '.get', '.notes'];
         const isOwnerCommand = ownerCommands.some(cmd => userMessage.startsWith(cmd));
 
         let isSenderAdmin = false;
@@ -824,6 +825,24 @@ async function handleMessages(sock, messageUpdate, printLog) {
 
             case userMessage.startsWith('.take'):
                 await takeCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('.save'):
+                {
+                    const saveTitle = rawText.slice(5).trim();
+                    await saveCommand(sock, chatId, message, senderId, saveTitle);
+                }
+                break;
+            case userMessage.startsWith('.get'):
+                {
+                    const getTitle = rawText.slice(4).trim();
+                    await getCommand(sock, chatId, message, getTitle);
+                }
+                break;
+            case userMessage.startsWith('.notes'):
+                {
+                    const notesArg = rawText.slice(6).trim();
+                    await notesCommand(sock, chatId, message, senderId, notesArg);
+                }
                 break;
             case userMessage === '.clearsession' || userMessage === '.clearsesi':
                 await clearSessionCommand(sock, chatId, message);
