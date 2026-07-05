@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Knight Bot is a WhatsApp bot built on `@whiskeysockets/baileys` (a multi-device WhatsApp Web API library). It's a single-process, plain CommonJS Node.js application — no build step, no bundler, no TypeScript. There is no database; all state is persisted to flat JSON files under `data/`.
+Night Hunter is a WhatsApp bot built on `@whiskeysockets/baileys` (a multi-device WhatsApp Web API library). It's a single-process, plain CommonJS Node.js application — no build step, no bundler, no TypeScript. There is no database; all state is persisted to flat JSON files under `data/`.
 
 ## Commands
 
