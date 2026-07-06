@@ -4,11 +4,13 @@ const { fetchBuffer } = require('../lib/myfunc');
 async function imagineCommand(sock, chatId, message) {
     try {
         // Get the prompt from the message
-        const prompt = message.message?.conversation?.trim() || 
+        const prompt = message.message?.conversation?.trim() ||
                       message.message?.extendedTextMessage?.text?.trim() || '';
-        
-        // Remove the command prefix and trim
-        const imagePrompt = prompt.slice(8).trim();
+
+        // Strip the command word (.imagine/.flux/.dalle all route here - they
+        // differ in length, so cut at the first space rather than a fixed
+        // offset, which used to chop real prompt text off .flux/.dalle).
+        const imagePrompt = prompt.split(' ').slice(1).join(' ').trim();
         
         if (!imagePrompt) {
             await sock.sendMessage(chatId, {
@@ -30,8 +32,10 @@ async function imagineCommand(sock, chatId, message) {
         const enhancedPrompt = enhancePrompt(imagePrompt);
 
         // Make API request
-        const response = await axios.get(`https://shizoapi.onrender.com/api/ai/imagine?apikey=shizo&query=${encodeURIComponent(enhancedPrompt)}`, {
-            responseType: 'arraybuffer'
+        const seed = Math.floor(Math.random() * 1000000);
+        const response = await axios.get(`https://image.pollinations.ai/prompt/${encodeURIComponent(enhancedPrompt)}?width=1024&height=1024&model=flux&nologo=true&seed=${seed}`, {
+            responseType: 'arraybuffer',
+            timeout: 60000
         });
 
         // Convert response to buffer
