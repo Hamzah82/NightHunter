@@ -143,7 +143,7 @@ async function handleTargetMode(sock, chatId, message, sub, target) {
     const label = sub === 'vo' ? 'Taken view-once' : 'Taken status';
 
     if (classified.type === 'phone') {
-        const record = takeCache.getLatestBySender(classified.jid, kind);
+        const record = await takeCache.getLatestBySenderResolved(sock, classified.jid, kind);
         return deliverRecordAndReply(sock, chatId, message, record, label);
     }
 
