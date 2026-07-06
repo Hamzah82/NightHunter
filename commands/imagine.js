@@ -1,6 +1,23 @@
 const axios = require('axios');
 const { fetchBuffer } = require('../lib/myfunc');
 
+// The flux model backing Pollinations barely understands non-English
+// prompts (e.g. Indonesian "paus" - whale - renders as an unrelated
+// portrait), so translate to English first. Google's unofficial endpoint
+// auto-detects the source language and is a no-op for already-English text.
+async function translateToEnglish(text) {
+    try {
+        const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q=${encodeURIComponent(text)}`;
+        const res = await axios.get(url, { timeout: 10000 });
+        if (res.data && res.data[0]) {
+            return res.data[0].map(seg => seg[0]).join('');
+        }
+    } catch (err) {
+        console.error('imagine translateToEnglish error:', err.message);
+    }
+    return text;
+}
+
 async function imagineCommand(sock, chatId, message) {
     try {
         // Get the prompt from the message
@@ -29,7 +46,8 @@ async function imagineCommand(sock, chatId, message) {
         });
 
         // Enhance the prompt with quality keywords
-        const enhancedPrompt = enhancePrompt(imagePrompt);
+        const englishPrompt = await translateToEnglish(imagePrompt);
+        const enhancedPrompt = enhancePrompt(englishPrompt);
 
         // Make API request
         const seed = Math.floor(Math.random() * 1000000);
