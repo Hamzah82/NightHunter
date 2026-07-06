@@ -15,13 +15,40 @@ async function resolveBlockedJid(sock, input) {
     return `${digits}@s.whatsapp.net`;
 }
 
+// @lid entries show an opaque "linked ID" (not the phone number) unless we
+// look up the real PN through Baileys' LID<->PN mapping store - without this
+// the blocklist shows unrecognizable numbers for anyone blocked/known via @lid.
+async function describeBlockedJids(sock, blocked) {
+    const lidJids = blocked.filter(jid => jid.endsWith('@lid'));
+    const pnByLid = new Map();
+    if (lidJids.length && sock.signalRepository?.lidMapping) {
+        try {
+            const pairs = await sock.signalRepository.lidMapping.getPNsForLIDs(lidJids);
+            for (const { lid, pn } of pairs || []) {
+                pnByLid.set(lid, pn.split('@')[0].split(':')[0]);
+            }
+        } catch (err) {
+            console.error('describeBlockedJids LID lookup error:', err);
+        }
+    }
+    return blocked.map(jid => {
+        const digits = jid.split('@')[0].split(':')[0];
+        if (jid.endsWith('@lid')) {
+            const resolvedPn = pnByLid.get(jid);
+            return resolvedPn ? resolvedPn : `${digits} (LID, nomor asli tidak diketahui)`;
+        }
+        return digits;
+    });
+}
+
 async function blocklistCommand(sock, chatId, message) {
     try {
         const blocked = await sock.fetchBlocklist();
         if (!blocked || !blocked.length) {
             return sock.sendMessage(chatId, { text: '✅ Tidak ada nomor yang diblokir bot.' }, { quoted: message });
         }
-        const list = blocked.map((jid, i) => `${i + 1}. ${jid.split('@')[0]}`).join('\n');
+        const descriptions = await describeBlockedJids(sock, blocked);
+        const list = descriptions.map((desc, i) => `${i + 1}. ${desc}`).join('\n');
         return sock.sendMessage(chatId, {
             text: `🚫 *Daftar Blokir Bot* (${blocked.length}):\n\n${list}\n\nGunakan *.unblock <nomor>* untuk melepas blokir.`
         }, { quoted: message });
