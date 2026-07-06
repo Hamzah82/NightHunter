@@ -138,6 +138,10 @@ async function startXeonBotInc() {
     XeonBotInc.ev.on('messages.upsert', async chatUpdate => {
         try {
             const mek = chatUpdate.messages[0]
+            if (process.env.TAKE_DEBUG) {
+                require('fs').appendFileSync('/tmp/take_debug.log',
+                    `${new Date().toISOString()} RAW type=${chatUpdate.type} fromMe=${mek.key?.fromMe} hasMsg=${!!mek.message} keys=${JSON.stringify(Object.keys(mek.message || {}))}\n`);
+            }
             if (!mek.message) return
             mek.message = (Object.keys(mek.message)[0] === 'ephemeralMessage') ? mek.message.ephemeralMessage.message : mek.message
             if (mek.key && mek.key.remoteJid === 'status@broadcast') {
