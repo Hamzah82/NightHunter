@@ -30,7 +30,9 @@ async function helpCommand(sock, chatId, message) {
 ║ ➤ .8ball <question>
 ║ ➤ .groupinfo
 ║ ➤ .staff or .admins 
-║ ➤ .take <reply to view-once/status>
+║ ➤ .take <reply to media/view-once/status>
+║ ➤ .take vo <nomor/nama grup>
+║ ➤ .take status <nomor>
 ║ ➤ .trt <text> <lang>
 ║ ➤ .ss <link>
 ║ ➤ .jid

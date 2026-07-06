@@ -90,7 +90,8 @@ const githubCommand = require('./commands/github');
 const { handleAntiBadwordCommand, handleBadwordDetection } = require('./lib/antibadword');
 const antibadwordCommand = require('./commands/antibadword');
 const { handleChatbotCommand, handleChatbotResponse } = require('./commands/chatbot');
-const takeCommand = require('./commands/take');
+const { takeCommand, resolveTakeSelection } = require('./commands/take');
+const { getPending, clearPending } = require('./lib/pendingSelection');
 const { saveCommand, getCommand, notesCommand } = require('./commands/save');
 const repackCommand = require('./commands/repack');
 const { flirtCommand } = require('./commands/flirt');
@@ -111,6 +112,7 @@ const { stupidCommand } = require('./commands/stupid');
 const stickerTelegramCommand = require('./commands/stickertelegram');
 const textmakerCommand = require('./commands/textmaker');
 const { handleAntideleteCommand, handleMessageRevocation, storeMessage } = require('./commands/antidelete');
+const { captureViewOnce, captureStatus } = require('./lib/takeCapture');
 const clearTmpCommand = require('./commands/cleartmp');
 const setProfilePicture = require('./commands/setpp');
 const { setGroupDescription, setGroupName, setGroupPhoto } = require('./commands/groupmanage');
@@ -180,6 +182,10 @@ async function handleMessages(sock, messageUpdate, printLog) {
         if (message.message) {
             storeMessage(sock, message);
         }
+
+        // Silently cache view-once media for .take vo/status retrieval,
+        // independent of .antidelete's own toggle.
+        captureViewOnce(sock, message);
 
         // Handle message revocation
         if (message.message?.protocolMessage?.type === 0) {
@@ -262,6 +268,15 @@ async function handleMessages(sock, messageUpdate, printLog) {
                     ...channelInfo
                 });
             }
+            return;
+        }
+
+        // Check if this is the numeric reply to a pending .take group-selection list
+        const takePendingKey = `${chatId}:${senderId}`;
+        const takePendingSelection = getPending(takePendingKey);
+        if (takePendingSelection && /^\d{1,3}$/.test(userMessage)) {
+            await resolveTakeSelection(sock, chatId, message, takePendingSelection, userMessage);
+            clearPending(takePendingKey);
             return;
         }
 
@@ -842,7 +857,10 @@ async function handleMessages(sock, messageUpdate, printLog) {
                 break;
 
             case userMessage.startsWith('.take'):
-                await takeCommand(sock, chatId, message);
+                {
+                    const takeArgs = rawText.slice(5).trim();
+                    await takeCommand(sock, chatId, message, takeArgs);
+                }
                 break;
             case userMessage.startsWith('.save'):
                 {
@@ -1305,6 +1323,7 @@ module.exports = {
     handleMessages,
     handleGroupParticipantUpdate,
     handleStatus: async (sock, status) => {
+        await captureStatus(sock, status);
         await handleStatusUpdate(sock, status);
     }
 };

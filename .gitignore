@@ -13,6 +13,7 @@ session/
 data/*.json
 !/data/owner.json
 data/saved_media/
+data/take_media/
 baileys_store.json
 
 # Environment variables
