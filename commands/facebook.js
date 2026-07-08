@@ -87,7 +87,7 @@ async function facebookCommand(sock, chatId, message) {
         // directly instead of running the video-download API chain, which
         // otherwise returns an unrelated random video for non-video posts.
         if (!ogVideoUrl && ogImages.length > 0 && !looksLikeVideoUrl) {
-            const caption = ogTitle ? `𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗗 𝗕𝗬 𝗞𝗡𝗜𝗚𝗛𝗧-𝗕𝗢𝗧\n\n📝 Title: ${ogTitle}` : "𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗗 𝗕𝗬 𝗞𝗡𝗜𝗚𝗛𝗧-𝗕𝗢𝗧";
+            const caption = ogTitle ? `𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗗 𝗕𝗬 𝗡𝗶𝗴𝗵𝘁𝗛𝘂𝗻𝘁𝗲𝗿-𝗕𝗢𝗧\n\n📝 Title: ${ogTitle}` : "𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗗 𝗕𝗬 𝗡𝗶𝗴𝗵𝘁𝗛𝘂𝗻𝘁𝗲𝗿-𝗕𝗢𝗧";
             for (let i = 0; i < ogImages.length; i++) {
                 await sock.sendMessage(chatId, {
                     image: { url: ogImages[i] },
@@ -231,7 +231,7 @@ async function facebookCommand(sock, chatId, message) {
 
         // Try URL method first (more reliable)
         try {
-            const caption = title ? `𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗗 𝗕𝗬 𝗞𝗡𝗜𝗚𝗛𝗧-𝗕𝗢𝗧\n\n📝 Title: ${title}` : "𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗗 𝗕𝗬 𝗞𝗡𝗜𝗚𝗛𝗧-𝗕𝗢𝗧";
+            const caption = title ? `𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗗 𝗕𝗬 𝗡𝗶𝗴𝗵𝘁𝗛𝘂𝗻𝘁𝗲𝗿-𝗕𝗢𝗧\n\n📝 Title: ${title}` : "𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗗 𝗕𝗬 𝗡𝗶𝗴𝗵𝘁𝗛𝘂𝗻𝘁𝗲𝗿-𝗕𝗢𝗧";
             
             await sock.sendMessage(chatId, {
                 video: { url: fbvid },
@@ -282,7 +282,7 @@ async function facebookCommand(sock, chatId, message) {
                 }
 
                 // Send the video
-                const caption = title ? `𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗗 𝗕𝗬 𝗞𝗡𝗜𝗚𝗛𝗧-𝗕𝗢𝗧\n\n📝 Title: ${title}` : "𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗗 𝗕𝗬 𝗞𝗡𝗜𝗚𝗛𝗧-𝗕𝗢𝗧";
+                const caption = title ? `𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗗 𝗕𝗬 𝗡𝗶𝗴𝗵𝘁𝗛𝘂𝗻𝘁𝗲𝗿-𝗕𝗢𝗧\n\n📝 Title: ${title}` : "𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗗 𝗕𝗬 𝗡𝗶𝗴𝗵𝘁𝗛𝘂𝗻𝘁𝗲𝗿-𝗕𝗢𝗧";
                 
                 await sock.sendMessage(chatId, {
                     video: { url: tempFile },
