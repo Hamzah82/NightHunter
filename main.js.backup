@@ -4,7 +4,7 @@ const { pmblockerCommand, readState: readPmBlockerState } = require('./commands/
 const { blocklistCommand, unblockCommand } = require('./commands/blocklist');
 const settingsCommand = require('./commands/settings');
 const soraCommand = require('./commands/sora');
-const jarvisCommand = require('./commands/jarvis');
+const jarvisCommand = require('./commands/jarvis');// 🧹 Fix for ENOSPC / temp overflow in hosted panels
 const fs = require('fs');
 const path = require('path');
 
