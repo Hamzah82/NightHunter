@@ -4,8 +4,6 @@
  * Retrieves the profile picture of a user mentioned or specified by number
  */
 
-const { getProfilePicture } = require('@whiskeysockets/baileys');
-
 async function getppCommand(sock, chatId, message) {
     try {
         // Extract the target from message text
@@ -58,6 +56,9 @@ async function getppCommand(sock, chatId, message) {
         
         // Format the JID for display
         const displayNumber = targetJid.split('@')[0];
+        
+        console.log(`Fetching profile picture for: ${targetJid}`);
+        console.log(`PP URL: ${ppUrl}`);
         
         // Send the profile picture
         await sock.sendMessage(chatId, {
