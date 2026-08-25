@@ -105,6 +105,7 @@ const characterCommand = require('./commands/character');
 const wastedCommand = require('./commands/wasted');
 const shipCommand = require('./commands/ship');
 const groupInfoCommand = require('./commands/groupinfo');
+const getppCommand = require('./commands/getpp');
 const resetlinkCommand = require('./commands/resetlink');
 const staffCommand = require('./commands/staff');
 const unbanCommand = require('./commands/unban');
@@ -468,6 +469,10 @@ async function handleMessages(sock, messageUpdate, printLog) {
                 break;
             case userMessage.startsWith('.attp'):
                 await attpCommand(sock, chatId, message);
+                break;
+            
+            case userMessage === '.ppget':
+                await getppCommand(sock, chatId, message);
                 break;
 
             case userMessage === '.settings':
