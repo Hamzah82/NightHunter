@@ -97,18 +97,9 @@ async function jarvisCommand(sock, chatId, message, text) {
         // Get the AI response
         const aiResponse = response.data.choices[0].message.content;
 
-        // Send the response
+        // Get the AI response and send directly (without extra formatting)
         await sock.sendMessage(chatId, {
-            text: `🤖 *Jarvis Response:*\n\n${aiResponse}`,
-            contextInfo: {
-                forwardingScore: 1,
-                isForwarded: true,
-                forwardedNewsletterMessageInfo: {
-                    newsletterJid: '120363161513685998@newsletter',
-                    newsletterName: 'Night Hunter MD',
-                    serverMessageId: -1
-                }
-            }
+            text: aiResponse
         }, { quoted: message });
 
     } catch (error) {
