@@ -147,12 +147,6 @@ const stickercropCommand = require('./commands/stickercrop');
 const updateCommand = require('./commands/update');
 const removebgCommand = require('./commands/removebg');
 const { reminiCommand } = require('./commands/remini');
-const { igsCommand } = require('./commands/igs');
-const { anticallCommand, readState: readAnticallState } = require('./commands/anticall');
-const { pmblockerCommand, readState: readPmBlockerState } = require('./commands/pmblocker');
-const { blocklistCommand, unblockCommand } = require('./commands/blocklist');
-const settingsCommand = require('./commands/settings');
-const soraCommand = require('./commands/sora');
 
 // Global settings
 global.packname = settings.packname;
