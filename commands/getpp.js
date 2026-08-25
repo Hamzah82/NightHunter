@@ -1,97 +1,83 @@
 /**
  * Get Profile Picture Command
  * Usage: .ppget <tag|nomor>
- * Retrieves the profile picture of a user mentioned or specified by number
  */
 
-const { proto } = require('@whiskeysockets/baileys');
-const fetch = require('node-fetch');
+const axios = require('axios');
 
 async function getppCommand(sock, chatId, message) {
     try {
-        // Extract the target from message text
         const rawText = message.message?.extendedTextMessage?.text || '';
         const parts = rawText.split(' ');
         
         let targetJid = null;
         
-        // Check if there's a quoted message
-        const quotedMsg = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-        if (quotedMsg) {
-            const quotedKey = message.message.extendedTextMessage.contextInfo.participant;
-            if (quotedKey) {
-                targetJid = quotedKey;
+        // Check quoted message
+        const contextInfo = message.message?.extendedTextMessage?.contextInfo;
+        if (contextInfo) {
+            if (contextInfo.participant) {
+                targetJid = contextInfo.participant;
+            } else if (contextInfo.mentionedJid && contextInfo.mentionedJid.length > 0) {
+                targetJid = contextInfo.mentionedJid[0];
             }
         }
         
-        // If no quoted message, check for mentions
-        if (!targetJid) {
-            const mentionedJid = message.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
-            if (mentionedJid.length > 0) {
-                targetJid = mentionedJid[0];
-            }
-        }
-        
-        // If still no target, check for phone number in arguments
+        // Check phone number
         if (!targetJid && parts.length > 1) {
             const phoneNumber = parts[1].replace(/[^0-9]/g, '');
             if (phoneNumber) {
-                // Convert phone number to WhatsApp JID format
                 targetJid = phoneNumber + '@s.whatsapp.net';
             }
         }
         
-        // If no target found, reply with usage instructions
         if (!targetJid) {
-            await sock.sendMessage(chatId, {
-                text: '❌ Please mention someone, quote their message, or write their number\n\nUsage:\n.ppg <tag|nomor>'
+            await sock.sendMessage(chatId, { 
+                text: '❌ Tag orangnya atau mention @someone atau tulis nomor\nUsage: .ppget <tag|nomor>'
             }, { quoted: message });
             return;
         }
         
-        // Try to get the profile picture URL
+        console.log('[GETPP] Target:', targetJid);
+        
+        // Get profile picture URL
         let ppUrl;
         try {
             ppUrl = await sock.profilePictureUrl(targetJid, 'image');
-        } catch (error) {
-            console.error('Error getting PP URL:', error);
+            console.log('[GETPP] PP URL:', ppUrl);
+        } catch (e) {
             ppUrl = 'https://i.imgur.com/2wzGhpF.jpeg';
         }
         
-        console.log(`Fetching PP for: ${targetJid}`);
-        console.log(`URL: ${ppUrl}`);
-        
-        // Fetch the image buffer
+        // Download image
         let imageBuffer;
         try {
-            const response = await fetch(ppUrl);
-            if (!response.ok) throw new Error('Failed to fetch image');
-            imageBuffer = Buffer.from(await response.arrayBuffer());
-            console.log(`Image fetched successfully: ${imageBuffer.length} bytes`);
+            const response = await axios.get(ppUrl, { responseType: 'arraybuffer' });
+            imageBuffer = Buffer.from(response.data, 'binary');
+            console.log('[GETPP] Image downloaded:', imageBuffer.length, 'bytes');
         } catch (error) {
-            console.error('Error fetching image:', error);
+            console.error('[GETPP] Download error:', error.message);
             await sock.sendMessage(chatId, {
-                text: `❌ Failed to download profile picture.\nMake sure @${targetJid.split('@')[0]} has a profile picture set and privacy settings allow it.`
-            }, { quoted: message });
+                text: `❌ Gagal ambil foto profil.\nTarget: @${targetJid.split('@')[0]}\nError: ${error.message}`
+            }, { quoted: message, mentions: [targetJid] });
             return;
         }
         
-        // Format the JID for display
         const displayNumber = targetJid.split('@')[0];
         
-        // Send the profile picture
+        // Send image
         await sock.sendMessage(chatId, {
             image: imageBuffer,
-            caption: `📸 *Profile Picture*\n\n👤 Number: @${displayNumber}\n🔗 Status: Retrieved successfully`,
+            caption: `📸 *Profile Picture*\n\n👤 Number: @${displayNumber}`,
             mentions: [targetJid]
         }, { quoted: message });
         
-        console.log(`✅ Profile picture sent successfully`);
+        console.log('[GETPP] ✅ Image sent successfully!');
         
     } catch (error) {
-        console.error('Error in getpp command:', error);
+        console.error('[GETPP] FATAL ERROR:', error);
+        console.error(error.stack);
         await sock.sendMessage(chatId, {
-            text: '❌ Failed to get profile picture. The user may have privacy settings enabled.'
+            text: '❌ Error dalam command .ppget!'
         }, { quoted: message });
     }
 }
