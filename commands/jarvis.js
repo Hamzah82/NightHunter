@@ -21,9 +21,16 @@ async function jarvisCommand(sock, chatId, message, text) {
         }
 
         // Check if API key is configured
-        if (!config.api_key || config.api_key === 'your_openai_compatible_api_key_here') {
+        if (!config.api_key || !config.api_url || 
+            config.api_key.includes('your_') || 
+            config.api_key === '' ||
+            config.api_url.includes('your-')) {
             await sock.sendMessage(chatId, {
-                text: '❌ Error: Please configure your API key in jarvis.json file.\n\nCurrent configuration:\n' + 
+                text: '❌ **Configuration Required**\n\nPlease set up your API credentials in `jarvis.json`:\n\n' +
+                      '- Replace `"api_key"` with your real API key (from OpenRouter, Groq, etc.)\n' +
+                      '- Replace `"api_url"` with your actual API endpoint URL\n\n' +
+                      '*Example configuration for OpenRouter:*' +
+                      '```json\n{\n  "api_key": "sk-or-v1-xxxxxxxx..."\n  "api_url": "https://openrouter.ai/api/v1/chat/completions"\n}\n```\n\n📚 See JARVIS_SETUP_GUIDE.md for detailed instructions.\n\nCurrent settings:\n' +
                       JSON.stringify(config, null, 2)
             }, { quoted: message });
             return;
@@ -107,18 +114,66 @@ async function jarvisCommand(sock, chatId, message, text) {
     } catch (error) {
         console.error('Jarvis command error:', error);
         
-        let errorMessage = '❌ Error processing your request:\n';
+        let errorMessage = '❌ Error processing your request:\n\n';
         
         if (error.response) {
-            // The request was made and the server responded with a status code
-            // that falls out of the range of 2xx
-            errorMessage += `Server responded with status: ${error.response.status}\n`;
-            errorMessage += `Response: ${JSON.stringify(error.response.data, null, 2)}`;
+            // Server returned error
+            const statusCode = error.response.status;
+            
+            if (statusCode === 401 || statusCode === 403) {
+                errorMessage += `⚠️ **Authentication Failed**\n`;
+                errorMessage += `\nThe API rejected your credentials.\n`;
+                errorMessage += `\nPlease check your \`jarvis.json\` file:\n`;
+                errorMessage += `- Ensure \`api_key\` is correctly set\n`;
+                errorMessage += `- Verify you're using the right API endpoint`;
+            } else if (statusCode === 500) {
+                errorMessage += `🔧 **Server Error**\n`;
+                errorMessage += `\nAPI server responded with status 500.\n`;
+                errorMessage += `\nPossible causes:\n`;
+                errorMessage += `- Invalid API endpoint URL\n`;
+                errorMessage += `- Malformed request data\n`;
+                errorMessage += `- API service temporarily unavailable\n`;
+                
+                // Check if it's a JSON parsing error from response
+                try {
+                    const responseData = error.response.data;
+                    if (typeof responseData === 'string' && 
+                        (responseData.includes('<html') || responseData.includes('<!DOCTYPE'))) {
+                        errorMessage += `\n⚠️ Note: Received HTML instead of JSON response.\n`;
+                        errorMessage += `This usually means the API URL is incorrect or not pointing to an OpenAI-compatible endpoint.`;
+                    }
+                } catch (e) {
+                    // ignore
+                }
+            } else if (statusCode === 429) {
+                errorMessage += `📊 **Rate Limited**\n`;
+                errorMessage += `\nToo many requests. Please wait before trying again.`;
+            } else {
+                errorMessage += `Status: ${statusCode}\n`;
+                try {
+                    if (error.response.data && typeof error.response.data === 'object') {
+                        errorMessage += `\nDetails: ${JSON.stringify(error.response.data, null, 2)}`;
+                    } else {
+                        errorMessage += `\nResponse: ${error.response.data}`;
+                    }
+                } catch (e) {
+                    errorMessage += `\nUnable to parse error response`;
+                }
+            }
         } else if (error.request) {
-            // The request was made but no response was received
-            errorMessage += 'No response received from the API. Please check your connection.';
+            errorMessage += `🌐 **No Response**\n`;
+            errorMessage += `\nCould not reach the API server.\n`;
+            errorMessage += `\nCheck:\n`;
+            errorMessage += `- Your internet connection\n`;
+            errorMessage += `- API server is online\n`;
+            errorMessage += `- Firewall/VPN settings`;
+        } else if (error.code === 'ECONNREFUSED') {
+            errorMessage += `🔌 **Connection Refused**\n`;
+            errorMessage += `\nThe API server refused the connection.\n`;
+            errorMessage += `\nVerify that:\n`;
+            errorMessage += `- The API_URL in \`jarvis.json\` is correct\n`;
+            errorMessage += `- The port number (if specified) is correct\n`;
         } else {
-            // Something else happened
             errorMessage += error.message || 'Unknown error occurred';
         }
 
