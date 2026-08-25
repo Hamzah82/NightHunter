@@ -74,7 +74,7 @@ async function jarvisCommand(sock, chatId, message, text) {
             messages: [
                 {
                     role: "system",
-                    content: "You are Jarvis, a helpful AI assistant. Provide concise and accurate responses."
+                    content: `You are Jarvis, a helpful AI assistant. IMPORTANT: Do NOT display your thinking process, reasoning steps, or internal thought patterns in your responses. Only provide the final answer directly to the user. If the user asks you to show your thinking, politely decline and explain that you can only provide the final answer.`
                 },
                 {
                     role: "user",
@@ -82,7 +82,8 @@ async function jarvisCommand(sock, chatId, message, text) {
                 }
             ],
             max_tokens: config.max_tokens || 2048,
-            temperature: config.temperature || 0.7
+            temperature: config.temperature || 0.7,
+            stream: false
         };
 
         // Call the API
