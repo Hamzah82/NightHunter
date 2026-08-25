@@ -1,4 +1,10 @@
-// 🧹 Fix for ENOSPC / temp overflow in hosted panels
+const { igsCommand } = require('./commands/igs');
+const { anticallCommand, readState: readAnticallState } = require('./commands/anticall');
+const { pmblockerCommand, readState: readPmBlockerState } = require('./commands/pmblocker');
+const { blocklistCommand, unblockCommand } = require('./commands/blocklist');
+const settingsCommand = require('./commands/settings');
+const soraCommand = require('./commands/sora');
+const jarvisCommand = require('./commands/jarvis');// 🧹 Fix for ENOSPC / temp overflow in hosted panels
 const fs = require('fs');
 const path = require('path');
 
@@ -1005,6 +1011,11 @@ async function handleMessages(sock, messageUpdate, printLog) {
                 break;
             case userMessage.startsWith('.gpt') || userMessage.startsWith('.gemini'):
                 await aiCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('.jarvis'):
+                const jarvisText = rawText.slice(7).trim();
+                await jarvisCommand(sock, chatId, message, jarvisText);
+                commandExecuted = true;
                 break;
             case userMessage.startsWith('.translate') || userMessage.startsWith('.trt'):
                 const commandLength = userMessage.startsWith('.translate') ? 10 : 4;
