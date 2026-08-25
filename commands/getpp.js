@@ -4,6 +4,9 @@
  * Retrieves the profile picture of a user mentioned or specified by number
  */
 
+const { proto } = require('@whiskeysockets/baileys');
+const fetch = require('node-fetch');
+
 async function getppCommand(sock, chatId, message) {
     try {
         // Extract the target from message text
@@ -46,26 +49,44 @@ async function getppCommand(sock, chatId, message) {
             return;
         }
         
-        // Try to get the profile picture
+        // Try to get the profile picture URL
         let ppUrl;
         try {
             ppUrl = await sock.profilePictureUrl(targetJid, 'image');
         } catch (error) {
-            ppUrl = 'https://i.imgur.com/2wzGhpF.jpeg'; // Default image
+            console.error('Error getting PP URL:', error);
+            ppUrl = 'https://i.imgur.com/2wzGhpF.jpeg';
+        }
+        
+        console.log(`Fetching PP for: ${targetJid}`);
+        console.log(`URL: ${ppUrl}`);
+        
+        // Fetch the image buffer
+        let imageBuffer;
+        try {
+            const response = await fetch(ppUrl);
+            if (!response.ok) throw new Error('Failed to fetch image');
+            imageBuffer = Buffer.from(await response.arrayBuffer());
+            console.log(`Image fetched successfully: ${imageBuffer.length} bytes`);
+        } catch (error) {
+            console.error('Error fetching image:', error);
+            await sock.sendMessage(chatId, {
+                text: `❌ Failed to download profile picture.\nMake sure @${targetJid.split('@')[0]} has a profile picture set and privacy settings allow it.`
+            }, { quoted: message });
+            return;
         }
         
         // Format the JID for display
         const displayNumber = targetJid.split('@')[0];
         
-        console.log(`Fetching profile picture for: ${targetJid}`);
-        console.log(`PP URL: ${ppUrl}`);
-        
         // Send the profile picture
         await sock.sendMessage(chatId, {
-            image: { url: ppUrl },
+            image: imageBuffer,
             caption: `📸 *Profile Picture*\n\n👤 Number: @${displayNumber}\n🔗 Status: Retrieved successfully`,
             mentions: [targetJid]
         }, { quoted: message });
+        
+        console.log(`✅ Profile picture sent successfully`);
         
     } catch (error) {
         console.error('Error in getpp command:', error);
