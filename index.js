@@ -96,7 +96,8 @@ async function startXeonBotInc() {
                 creds: state.creds,
                 keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
             },
-            markOnlineOnConnect: true,
+            markOnlineOnConnect: false,
+            emitOnline: false,
             generateHighQualityLinkPreview: true,
             syncFullHistory: false,
             getMessage: async (key) => {
@@ -277,20 +278,14 @@ async function startXeonBotInc() {
 
             try {
                 const botNumber = XeonBotInc.user.id.split(':')[0] + '@s.whatsapp.net';
-                await XeonBotInc.sendMessage(botNumber, {
-                    text: `🤖 Bot Connected Successfully!\n\n⏰ Time: ${new Date().toLocaleString()}\n✅ Status: Online and Ready!\n\n✅Make sure to join below channel`,
-                    contextInfo: {
-                        forwardingScore: 1,
-                        isForwarded: true,
-                        forwardedNewsletterMessageInfo: {
-                            newsletterJid: '120363161513685998@newsletter',
-                            newsletterName: 'Night Hunter MD',
-                            serverMessageId: -1
-                        }
-                    }
-                });
+                // Ghost mode: jangan kirim pesan "Bot Connected" yang menandakan nomor online.
+                // Kirim presence 'unavailable' jika method tersedia (non-essential, di-bungkus try/catch).
+                if (typeof XeonBotInc.sendPresenceUpdate === 'function') {
+                    await XeonBotInc.sendPresenceUpdate('unavailable', botNumber);
+                }
+                console.log(chalk.green('🫥 Ghost mode aktif — status "online" disembunyikan.'))
             } catch (error) {
-                console.error('Error sending connection message:', error.message)
+                console.error('Error setting presence:', error.message)
             }
 
             await delay(1999)
