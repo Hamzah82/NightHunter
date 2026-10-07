@@ -339,7 +339,11 @@ async function handleMessages(sock, messageUpdate, printLog) {
                 }
             } else {
                 // PRIVATE CHAT: CS AI Auto-Reply for non-command messages
-                if (!message.key.fromMe && userMessage) {
+                // Skip pesan dari newsletter/saluran & status broadcast — bukan chat user sungguhan
+                const isNewsletter = chatId.endsWith('@newsletter');
+                const isBroadcast = chatId.endsWith('@broadcast') || chatId === 'status@broadcast';
+
+                if (!message.key.fromMe && userMessage && !isNewsletter && !isBroadcast) {
                     // Baca konfigurasi jarvis untuk API credentials
                     let jarvisConfig = null;
                     try {
