@@ -148,24 +148,41 @@ function getSession(senderId) {
     return sessions[key];
 }
 
-function updateSession(senderId, role, content) {
+/**
+ * Rekam pesan ke session per nomor.
+ * Role yang didukung:
+ *  - "user"  → pesan dari lawan bicara (bukan owner, bukan bot)
+ *  - "owner" → pesan dari owner (Hamzah)
+ *  - "bot"   → pesan dari CS AI
+ *
+ * Setiap session menyimpan maks 100 pesan terakhir agar konteks tetap kaya
+ * tapi tidak membengkak.
+ */
+function updateSession(senderId, role, content, senderName) {
+    if (!content || !content.trim()) return;
+
     const sessions = loadSessions();
     const key = normalizeJid(senderId);
-    
+
     if (!sessions[key]) {
         sessions[key] = {
             history: [],
             createdAt: new Date().toISOString()
         };
     }
-    
-    sessions[key].history.push({ role, content, timestamp: new Date().toISOString() });
-    
-    // Keep last 20 messages max (10 turns)
-    if (sessions[key].history.length > 20) {
-        sessions[key].history = sessions[key].history.slice(-20);
+
+    sessions[key].history.push({
+        role,
+        content: content.trim(),
+        sender: senderName || null,
+        timestamp: new Date().toISOString()
+    });
+
+    // Keep last 100 messages max
+    if (sessions[key].history.length > 100) {
+        sessions[key].history = sessions[key].history.slice(-100);
     }
-    
+
     sessions[key].updatedAt = new Date().toISOString();
     saveSessions(sessions);
 }
@@ -425,6 +442,23 @@ async function csbotCommand(sock, chatId, message, args, senderIsOwner) {
 // ========== AUTO REPLY HANDLER ==========
 
 /**
+ * Rekam pesan dari owner (dari sisi bot / fromMe = true) ke session lawan bicara.
+ * Dipanggil dari main.js ketika owner mengirim pesan di chat pribadi.
+ * Tujuan: CS AI bisa belajar gaya bicara owner dengan lawan bicara tsb.
+ */
+function recordOwnerMessage(chatId, ownerMessage) {
+    try {
+        if (!chatId || !ownerMessage || !ownerMessage.trim()) return;
+        // Skip newsletter/broadcast
+        if (chatId.endsWith('@newsletter') || chatId.endsWith('@broadcast')) return;
+
+        updateSession(chatId, 'owner', ownerMessage);
+    } catch (error) {
+        console.error('❌ Record Owner Message Error:', error.message);
+    }
+}
+
+/**
  * Handle auto-reply AI untuk pesan private chat
  * Dipanggil dari main.js untuk setiap pesan non-command di chat pribadi
  */
@@ -443,26 +477,36 @@ async function handleCsAutoReply(sock, chatId, message, userMessage, senderId, c
         // Ambil session user
         const session = getSession(senderId);
         
-        // Simpan pesan user ke session
-        updateSession(senderId, 'user', userMessage);
+        // Rekam pesan user ke session
+        const senderName = message.pushName || null;
+        updateSession(senderId, 'user', userMessage, senderName);
 
         // Tampilkan typing indicator
         try {
             await sock.sendPresenceUpdate('composing', chatId);
         } catch (e) {}
 
-        // Siapkan konteks dari history
-        const historyMessages = session.history.slice(-10).map(msg => ({
-            role: msg.role,
-            content: msg.content
-        }));
+        // Siapkan konteks dari history — konversi role untuk API
+        // owner → assistant, bot → assistant, user → user
+        const historyMessages = session.history.slice(-50).map(msg => {
+            let apiRole;
+            if (msg.role === 'user') apiRole = 'user';
+            else if (msg.role === 'owner') apiRole = 'assistant';
+            else if (msg.role === 'bot') apiRole = 'assistant';
+            else apiRole = 'user';
+            
+            return {
+                role: apiRole,
+                content: msg.content
+            };
+        });
 
         // Panggil API Jarvis
         const response = await callAiApi(userMessage, historyMessages, config);
 
         if (response) {
-            // Simpan response AI ke session
-            updateSession(senderId, 'assistant', response);
+            // Rekam jawaban AI ke session (role: bot)
+            updateSession(senderId, 'bot', response);
 
             // Kirim balasan
             await sock.sendMessage(chatId, {
@@ -522,5 +566,6 @@ module.exports = {
     loadDisabled,
     loadSessions,
     isGlobalEnabled,
-    setGlobalEnabled
+    setGlobalEnabled,
+    recordOwnerMessage
 };

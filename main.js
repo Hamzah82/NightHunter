@@ -96,7 +96,7 @@ const githubCommand = require('./commands/github');
 const { handleAntiBadwordCommand, handleBadwordDetection } = require('./lib/antibadword');
 const antibadwordCommand = require('./commands/antibadword');
 const { handleChatbotCommand, handleChatbotResponse } = require('./commands/chatbot');
-const { csbotCommand, handleCsAutoReply } = require('./commands/csbot');
+const { csbotCommand, handleCsAutoReply, recordOwnerMessage } = require('./commands/csbot');
 const { takeCommand, resolveTakeSelection } = require('./commands/take');
 const { getPending, clearPending } = require('./lib/pendingSelection');
 const { saveCommand, getCommand, notesCommand } = require('./commands/save');
@@ -261,6 +261,13 @@ async function handleMessages(sock, messageUpdate, printLog) {
             // default isPublic=true on error
         }
         const isOwnerOrSudoCheck = message.key.fromMe || senderIsOwnerOrSudo;
+
+        // Rekam pesan owner (fromMe) ke session CS AI untuk learning gaya bicara
+        // Hanya di private chat, bukan grup/newsletter/broadcast
+        if (message.key.fromMe && rawText && !isGroup && !chatId.endsWith('@newsletter') && !chatId.endsWith('@broadcast')) {
+            recordOwnerMessage(chatId, rawText);
+        }
+
         // Check if user is banned (skip ban check for unban command)
         if (isBanned(senderId) && !userMessage.startsWith('.unban')) {
             // Only respond occasionally to avoid spam
