@@ -668,12 +668,52 @@ async function processAiReply(sock, chatId, senderId, config) {
             // Rekam jawaban AI ke session (role: bot)
             updateSession(senderId, 'bot', response);
 
-            // Kirim balasan
-            await sock.sendMessage(chatId, { text: response }, { quoted: null });
+            // Parse multi-bubble: format [BUBBLE 1], [BUBBLE 2], dst.
+            const bubbles = parseMultiBubble(response);
+
+            // Kirim bubble satu per satu dengan jeda biar natural
+            for (let i = 0; i < bubbles.length; i++) {
+                if (i > 0) {
+                    // Jeda 1-2 detik antar bubble biar kaya orang ngetik
+                    await new Promise(r => setTimeout(r, 1000 + Math.random() * 1000));
+                }
+                await sock.sendMessage(chatId, { text: bubbles[i] }, { quoted: null });
+            }
         }
     } catch (error) {
         console.error('❌ CS AI Process Reply Error:', error);
     }
+}
+
+/**
+ * Parse response AI yang berformat multi-bubble menjadi array pesan.
+ * Format: [BUBBLE 1]\npesan 1\n[BUBBLE 2]\npesan 2\n...
+ * Fallback: kalau gak ada format [BUBBLE], return seluruh response sebagai 1 bubble.
+ */
+function parseMultiBubble(response) {
+    if (!response) return [];
+
+    // Regex untuk menangkap [BUBBLE 1], [BUBBLE 2], [BUBBLE 3], [BUBBLE 4]
+    const bubbleRegex = /\[BUBBLE\s*\d+\]\s*([\s\S]*?)(?=\[BUBBLE\s*\d+\]|$)/gi;
+    const matches = [];
+    let match;
+
+    while ((match = bubbleRegex.exec(response)) !== null) {
+        const content = match[1].trim();
+        if (content) {
+            matches.push(content);
+        }
+    }
+
+    // Kalau ada format bubble, return hasil parse
+    if (matches.length > 0) return matches;
+
+    // Fallback: coba split berdasarkan baris kosong ganda (paragraf)
+    const paragraphs = response.split(/\n\s*\n/).map(p => p.trim()).filter(p => p);
+    if (paragraphs.length > 1) return paragraphs;
+
+    // Fallback terakhir: 1 bubble berisi seluruh response
+    return [response.trim()];
 }
 
 /**
