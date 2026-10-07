@@ -611,6 +611,11 @@ async function csbotCommand(sock, chatId, message, args, senderIsOwner) {
 
 // ========== AUTO REPLY HANDLER ==========
 
+// Debounce timer: nunggu 60 detik setelah pesan terakhir sebelum panggil API
+// Key: nomor user, Value: setTimeout ID
+const debounceTimers = new Map();
+const DEBOUNCE_DELAY = 60 * 1000; // 60 detik
+
 /**
  * Rekam pesan dari owner (dari sisi bot / fromMe = true) ke session lawan bicara.
  * Dipanggil dari main.js ketika owner mengirim pesan di chat pribadi.
@@ -629,27 +634,17 @@ function recordOwnerMessage(chatId, ownerMessage) {
 }
 
 /**
- * Handle auto-reply AI untuk pesan private chat
- * Dipanggil dari main.js untuk setiap pesan non-command di chat pribadi
+ * Proses AI setelah debounce selesai (60 detik tanpa pesan baru).
  */
-async function handleCsAutoReply(sock, chatId, message, userMessage, senderId, config) {
+async function processAiReply(sock, chatId, senderId, config) {
     try {
-        // Cek global flag — jika nonaktif global, skip semua
-        if (!isGlobalEnabled()) {
-            return;
-        }
+        // Cek sekali lagi sebelum proses (mungkin owner udah matiin global di tengah jalan)
+        if (!isGlobalEnabled()) return;
+        if (isAiDisabled(senderId)) return;
 
-        // Cek apakah nomor ini dinonaktifkan
-        if (isAiDisabled(senderId)) {
-            return; // Skip, jangan jawab
-        }
-
-        // Ambil session user
         const session = getSession(senderId);
-        
-        // Rekam pesan user ke session
-        const senderName = message.pushName || null;
-        updateSession(senderId, 'user', userMessage, senderName);
+        const userMessage = session.history.filter(m => m.role === 'user').pop()?.content;
+        if (!userMessage) return;
 
         // Tampilkan typing indicator
         try {
@@ -657,18 +652,13 @@ async function handleCsAutoReply(sock, chatId, message, userMessage, senderId, c
         } catch (e) {}
 
         // Siapkan konteks dari history — konversi role untuk API
-        // owner → assistant, bot → assistant, user → user
         const historyMessages = session.history.slice(-50).map(msg => {
             let apiRole;
             if (msg.role === 'user') apiRole = 'user';
             else if (msg.role === 'owner') apiRole = 'assistant';
             else if (msg.role === 'bot') apiRole = 'assistant';
             else apiRole = 'user';
-            
-            return {
-                role: apiRole,
-                content: msg.content
-            };
+            return { role: apiRole, content: msg.content };
         });
 
         // Panggil API Jarvis
@@ -679,10 +669,52 @@ async function handleCsAutoReply(sock, chatId, message, userMessage, senderId, c
             updateSession(senderId, 'bot', response);
 
             // Kirim balasan
-            await sock.sendMessage(chatId, {
-                text: response
-            }, { quoted: message });
+            await sock.sendMessage(chatId, { text: response }, { quoted: null });
         }
+    } catch (error) {
+        console.error('❌ CS AI Process Reply Error:', error);
+    }
+}
+
+/**
+ * Handle auto-reply AI untuk pesan private chat dengan debounce 60 detik.
+ * Setiap pesan masuk langsung direkam ke session, lalu timer 60 detik di-reset.
+ * Kalau sudah 60 detik tanpa pesan baru, baru panggil API.
+ */
+async function handleCsAutoReply(sock, chatId, message, userMessage, senderId, config) {
+    try {
+        // Cek global flag — jika nonaktif global, skip semua
+        if (!isGlobalEnabled()) return;
+
+        // Cek apakah nomor ini dinonaktifkan
+        if (isAiDisabled(senderId)) return;
+
+        // Ambil session user
+        const session = getSession(senderId);
+
+        // Rekam pesan user ke session
+        const senderName = message.pushName || null;
+        updateSession(senderId, 'user', userMessage, senderName);
+
+        // Tampilkan typing indicator
+        try {
+            await sock.sendPresenceUpdate('composing', chatId);
+        } catch (e) {}
+
+        // Reset debounce timer — batalkan timer lama, buat timer baru
+        const key = normalizeJid(senderId);
+        if (debounceTimers.has(key)) {
+            clearTimeout(debounceTimers.get(key));
+        }
+
+        // Set timer baru 60 detik
+        const timerId = setTimeout(async () => {
+            debounceTimers.delete(key);
+            await processAiReply(sock, chatId, senderId, config);
+        }, DEBOUNCE_DELAY);
+
+        debounceTimers.set(key, timerId);
+
     } catch (error) {
         console.error('❌ CS Auto Reply Error:', error);
     }
