@@ -263,9 +263,13 @@ async function handleMessages(sock, messageUpdate, printLog) {
         const isOwnerOrSudoCheck = message.key.fromMe || senderIsOwnerOrSudo;
 
         // Rekam pesan owner (fromMe) ke session CS AI untuk learning gaya bicara
-        // Hanya di private chat, bukan grup/newsletter/broadcast
+        // Hanya di private chat, bukan grup/newsletter/broadcast, dan bukan chat ke diri sendiri
         if (message.key.fromMe && rawText && !isGroup && !chatId.endsWith('@newsletter') && !chatId.endsWith('@broadcast')) {
-            recordOwnerMessage(chatId, rawText);
+            const ownerNumber = require('./settings').ownerNumber.replace(/[^0-9]/g, '');
+            const chatNumber = chatId.split('@')[0].split(':')[0];
+            if (chatNumber !== ownerNumber) {
+                recordOwnerMessage(chatId, rawText);
+            }
         }
 
         // Check if user is banned (skip ban check for unban command)
