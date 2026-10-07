@@ -651,8 +651,8 @@ async function processAiReply(sock, chatId, senderId, config) {
             await sock.sendPresenceUpdate('composing', chatId);
         } catch (e) {}
 
-        // Siapkan konteks dari history — konversi role untuk API
-        const historyMessages = session.history.slice(-50).map(msg => {
+        // Siapkan konteks dari history — kirim SEMUA, gak perlu di-trim
+        const historyMessages = session.history.map(msg => {
             let apiRole;
             if (msg.role === 'user') apiRole = 'user';
             else if (msg.role === 'owner') apiRole = 'assistant';
