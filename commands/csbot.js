@@ -142,6 +142,98 @@ function getAllSessionNumbers() {
     }
 }
 
+/**
+ * Hitung statistik dari semua session di data/sesiAI/
+ */
+function getStats() {
+    const numbers = getAllSessionNumbers();
+    const stats = {
+        totalSessions: numbers.length,
+        totalMessages: 0,
+        totalUserMessages: 0,
+        totalOwnerMessages: 0,
+        totalBotMessages: 0,
+        totalSizeBytes: 0,
+        largestSession: null,   // { number, messages }
+        mostActiveSession: null, // { number, messages }
+        activeToday: 0,
+        activeLast7Days: 0,
+        oldestSession: null,    // { number, createdAt }
+        newestSession: null     // { number, updatedAt }
+    };
+
+    const now = Date.now();
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    const sevenDaysMs = 7 * oneDayMs;
+
+    for (const number of numbers) {
+        try {
+            const filePath = getSessionPath(number);
+            const fileSize = fs.statSync(filePath).size;
+            stats.totalSizeBytes += fileSize;
+
+            const session = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            const history = session.history || [];
+            const msgCount = history.length;
+
+            stats.totalMessages += msgCount;
+
+            for (const msg of history) {
+                if (msg.role === 'user') stats.totalUserMessages++;
+                else if (msg.role === 'owner') stats.totalOwnerMessages++;
+                else if (msg.role === 'bot') stats.totalBotMessages++;
+            }
+
+            // Session dengan pesan terbanyak
+            if (!stats.largestSession || msgCount > stats.largestSession.messages) {
+                stats.largestSession = { number, messages: msgCount };
+            }
+
+            // Session paling aktif (berdasarkan updatedAt)
+            const updated = session.updatedAt ? new Date(session.updatedAt).getTime() : 0;
+            if (updated && (!stats.mostActiveSession || updated > stats.mostActiveSession.updatedAt)) {
+                stats.mostActiveSession = { number, updatedAt: updated };
+            }
+
+            // Session aktif hari ini / 7 hari terakhir
+            if (updated && (now - updated) <= oneDayMs) stats.activeToday++;
+            if (updated && (now - updated) <= sevenDaysMs) stats.activeLast7Days++;
+
+            // Session paling lama / terbaru
+            const created = session.createdAt ? new Date(session.createdAt).getTime() : 0;
+            if (created && (!stats.oldestSession || created < stats.oldestSession.createdAt)) {
+                stats.oldestSession = { number, createdAt: created };
+            }
+            if (created && (!stats.newestSession || created > stats.newestSession.createdAt)) {
+                stats.newestSession = { number, createdAt: created };
+            }
+        } catch (e) {
+            // Skip file yang corrupt
+        }
+    }
+
+    return stats;
+}
+
+function formatBytes(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function formatTimeAgo(timestamp) {
+    if (!timestamp) return '-';
+    const diff = Date.now() - timestamp;
+    const mins = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (mins < 1) return 'baru saja';
+    if (mins < 60) return `${mins} menit lalu`;
+    if (hours < 24) return `${hours} jam lalu`;
+    return `${days} hari lalu`;
+}
+
 // ========== HELPERS ==========
 
 function normalizeJid(jid) {
@@ -245,6 +337,7 @@ async function csbotCommand(sock, chatId, message, args, senderIsOwner) {
                           `Fitur auto-reply AI untuk setiap pesan masuk di chat pribadi.\n\n` +
                           `*Commands:*\n` +
                           `• \`.ai status\` — Status global + daftar nomor nonaktif\n` +
+                          `• \`.ai stats\` — Statistik session & pesan\n` +
                           `• \`.ai on global\` — Aktifkan CS AI secara global (default)\n` +
                           `• \`.ai off global\` — Nonaktifkan CS AI secara global\n` +
                           `• \`.ai off\` — Nonaktifkan CS AI (di chat pribadi, otomatis target lawan bicara)\n` +
@@ -282,6 +375,48 @@ async function csbotCommand(sock, chatId, message, args, senderIsOwner) {
                     const hasSession = sessionNumbers.includes(number) ? ' 📝' : '';
                     msg += `${i + 1}. ${number}${hasSession}\n`;
                 });
+            }
+
+            await sock.sendMessage(chatId, { text: msg }, { quoted: message });
+            return;
+        }
+
+        if (subCommand === 'stats') {
+            const stats = getStats();
+            const globalEnabled = isGlobalEnabled();
+            const disabled = loadDisabled();
+
+            let msg = `📊 *Statistik CS AI*\n\n`;
+            msg += `*Status Global:* ${globalEnabled ? '🟢 Aktif' : '🔴 Nonaktif'}\n`;
+            msg += `*Nomor Nonaktif:* ${disabled.length}\n\n`;
+
+            msg += `*📁 Session*\n`;
+            msg += `• Total session: ${stats.totalSessions}\n`;
+            msg += `• Aktif hari ini: ${stats.activeToday}\n`;
+            msg += `• Aktif 7 hari terakhir: ${stats.activeLast7Days}\n`;
+            msg += `• Total ukuran: ${formatBytes(stats.totalSizeBytes)}\n\n`;
+
+            msg += `*💬 Pesan*\n`;
+            msg += `• Total pesan: ${stats.totalMessages}\n`;
+            msg += `• Dari user: ${stats.totalUserMessages}\n`;
+            msg += `• Dari owner: ${stats.totalOwnerMessages}\n`;
+            msg += `• Dari bot: ${stats.totalBotMessages}\n\n`;
+
+            if (stats.largestSession) {
+                msg += `*🏆 Session Terbesar*\n`;
+                msg += `• ${stats.largestSession.number} (${stats.largestSession.messages} pesan)\n\n`;
+            }
+
+            if (stats.mostActiveSession) {
+                msg += `*🔥 Terakhir Aktif*\n`;
+                msg += `• ${stats.mostActiveSession.number} (${formatTimeAgo(stats.mostActiveSession.updatedAt)})\n\n`;
+            }
+
+            if (stats.totalSessions > 0) {
+                const avg = Math.round(stats.totalMessages / stats.totalSessions);
+                msg += `*📈 Rata-rata:* ${avg} pesan per session`;
+            } else {
+                msg += `_Belum ada session. Session akan muncul setelah ada chat masuk._`;
             }
 
             await sock.sendMessage(chatId, { text: msg }, { quoted: message });
