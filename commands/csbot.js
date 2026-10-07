@@ -89,7 +89,7 @@ function clearSession(senderId) {
 
 /**
  * .ai on <nomor>   — Aktifkan CS AI untuk nomor tertentu (hapus dari disabled list)
- * .ai off <nomor>  — Nonaktifkan CS AI untuk nomor tertentu (tambah ke disabled list)
+ * .ai off <nomor>  — Nonaktifkan CS AI. Jika di chat pribadi tanpa nomor, pakai nomor lawan bicara
  * .ai status       — Lihat daftar nomor yang dinonaktifkan
  * .ai clear <nomor> — Hapus session chat user
  */
@@ -106,16 +106,24 @@ async function csbotCommand(sock, chatId, message, args, senderIsOwner) {
 
         if (!subCommand) {
             // Show help
+            const isGroup = chatId.endsWith('@g.us');
+            let helpText = `🤖 *CS AI Bot — Auto Reply*\n\n` +
+                          `Fitur auto-reply AI untuk setiap pesan masuk di chat pribadi.\n\n` +
+                          `*Commands:*\n` +
+                          `• \`.ai status\` — Lihat daftar nomor yang dinonaktifkan\n` +
+                          `• \`.ai off\` — Nonaktifkan CS AI (di chat pribadi, otomatis target lawan bicara)\n` +
+                          `• \`.ai off <nomor>\` — Nonaktifkan CS AI untuk nomor tertentu\n` +
+                          `• \`.ai on <nomor>\` — Aktifkan kembali CS AI untuk nomor tsb\n` +
+                          `• \`.ai clear <nomor>\` — Hapus session chat user\n` +
+                          `• \`.ai clearchat\` — Hapus semua session\n\n` +
+                          `*Catatan:* Setiap user punya session terpisah agar konteks tidak tercampur.`;
+
+            if (isGroup) {
+                helpText += `\n\n⚠️ *Di grup*, \`.ai off\` tanpa nomor tidak bisa — gunakan \`.ai off <nomor>\``;
+            }
+
             await sock.sendMessage(chatId, {
-                text: `🤖 *CS AI Bot — Auto Reply*\n\n` +
-                      `Fitur auto-reply AI untuk setiap pesan masuk di chat pribadi.\n\n` +
-                      `*Commands:*\n` +
-                      `• \`.ai status\` — Lihat daftar nomor yang dinonaktifkan\n` +
-                      `• \`.ai off <nomor>\` — Nonaktifkan CS AI untuk nomor tsb\n` +
-                      `• \`.ai on <nomor>\` — Aktifkan kembali CS AI untuk nomor tsb\n` +
-                      `• \`.ai clear <nomor>\` — Hapus session chat user\n` +
-                      `• \`.ai clearchat\` — Hapus semua session\n\n` +
-                      `*Catatan:* Setiap user punya session terpisah agar konteks tidak tercampur.`
+                text: helpText
             }, { quoted: message });
             return;
         }
@@ -144,14 +152,50 @@ async function csbotCommand(sock, chatId, message, args, senderIsOwner) {
 
         if (subCommand === 'off') {
             const target = args[1];
+            let normalizedTarget;
+
             if (!target) {
+                // ===== TANPA NOMOR: otomatis pakai lawan bicara di chat pribadi =====
+                const isGroup = chatId.endsWith('@g.us');
+                if (isGroup) {
+                    await sock.sendMessage(chatId, {
+                        text: '❌ Di grup, kamu harus menyertakan nomor.\n\nContoh: `.ai off 6281234567890`'
+                    }, { quoted: message });
+                    return;
+                }
+
+                // chatId adalah JID lawan bicara di private chat
+                normalizedTarget = normalizeJid(chatId);
+
+                // Pastikan owner tidak bisa menonaktifkan dirinya sendiri
+                const ownerNumber = require('../settings').ownerNumber.replace(/[^0-9]/g, '');
+                if (normalizedTarget === ownerNumber) {
+                    await sock.sendMessage(chatId, {
+                        text: '❌ Tidak bisa menonaktifkan CS AI untuk owner sendiri.'
+                    }, { quoted: message });
+                    return;
+                }
+
+                const disabled = loadDisabled();
+                if (disabled.some(entry => normalizeJid(entry) === normalizedTarget)) {
+                    await sock.sendMessage(chatId, {
+                        text: `⚠️ CS AI untuk nomor *${normalizedTarget}* sudah dinonaktifkan sebelumnya.`
+                    }, { quoted: message });
+                    return;
+                }
+
+                const targetJid = normalizedTarget + '@s.whatsapp.net';
+                disabled.push(targetJid);
+                saveDisabled(disabled);
+
                 await sock.sendMessage(chatId, {
-                    text: '❌ Masukkan nomor yang ingin dinonaktifkan.\n\nContoh: `.ai off 6281234567890`'
+                    text: `🚫 *CS AI Dinonaktifkan*\n\nNomor: *${normalizedTarget}*\nPesan dari nomor ini tidak akan dijawab oleh AI lagi.`
                 }, { quoted: message });
                 return;
             }
 
-            const normalizedTarget = target.replace(/[^0-9]/g, '');
+            // ===== DENGAN NOMOR: seperti biasa =====
+            normalizedTarget = target.replace(/[^0-9]/g, '');
             if (!normalizedTarget) {
                 await sock.sendMessage(chatId, {
                     text: '❌ Nomor tidak valid. Gunakan format angka saja.\n\nContoh: `.ai off 6281234567890`'
