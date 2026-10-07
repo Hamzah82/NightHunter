@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const AI_DISABLED_PATH = path.join(__dirname, '../data/aiDisabled.json');
-const AI_SESSIONS_PATH = path.join(__dirname, '../data/aiSessions.json');
+const SESI_DIR = path.join(__dirname, '../data/sesiAI');
 const SYSPROMPT_PATH = path.join(__dirname, '../SYSPROMPT.md');
 
 // ========== SYSTEM PROMPT LOADER ==========
@@ -110,16 +110,36 @@ function saveDisabled(list) {
     saveAiData(data);
 }
 
-function loadSessions() {
+function getSessionPath(number) {
+    return path.join(SESI_DIR, `${number}.json`);
+}
+
+function loadSession(number) {
     try {
-        return JSON.parse(fs.readFileSync(AI_SESSIONS_PATH, 'utf8'));
+        const filePath = getSessionPath(number);
+        if (!fs.existsSync(filePath)) return null;
+        return JSON.parse(fs.readFileSync(filePath, 'utf8'));
     } catch {
-        return {};
+        return null;
     }
 }
 
-function saveSessions(data) {
-    fs.writeFileSync(AI_SESSIONS_PATH, JSON.stringify(data, null, 2));
+function saveSession(number, data) {
+    if (!fs.existsSync(SESI_DIR)) {
+        fs.mkdirSync(SESI_DIR, { recursive: true });
+    }
+    fs.writeFileSync(getSessionPath(number), JSON.stringify(data, null, 2));
+}
+
+function getAllSessionNumbers() {
+    try {
+        if (!fs.existsSync(SESI_DIR)) return [];
+        return fs.readdirSync(SESI_DIR)
+            .filter(f => f.endsWith('.json'))
+            .map(f => f.replace('.json', ''));
+    } catch {
+        return [];
+    }
 }
 
 // ========== HELPERS ==========
@@ -135,17 +155,17 @@ function isAiDisabled(senderId) {
 }
 
 function getSession(senderId) {
-    const sessions = loadSessions();
-    const key = normalizeJid(senderId);
-    if (!sessions[key]) {
-        sessions[key] = {
+    const number = normalizeJid(senderId);
+    let session = loadSession(number);
+    if (!session) {
+        session = {
             history: [],
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
-        saveSessions(sessions);
+        saveSession(number, session);
     }
-    return sessions[key];
+    return session;
 }
 
 /**
@@ -161,17 +181,17 @@ function getSession(senderId) {
 function updateSession(senderId, role, content, senderName) {
     if (!content || !content.trim()) return;
 
-    const sessions = loadSessions();
-    const key = normalizeJid(senderId);
+    const number = normalizeJid(senderId);
+    let session = loadSession(number);
 
-    if (!sessions[key]) {
-        sessions[key] = {
+    if (!session) {
+        session = {
             history: [],
             createdAt: new Date().toISOString()
         };
     }
 
-    sessions[key].history.push({
+    session.history.push({
         role,
         content: content.trim(),
         sender: senderName || null,
@@ -179,19 +199,24 @@ function updateSession(senderId, role, content, senderName) {
     });
 
     // Keep last 100 messages max
-    if (sessions[key].history.length > 100) {
-        sessions[key].history = sessions[key].history.slice(-100);
+    if (session.history.length > 100) {
+        session.history = session.history.slice(-100);
     }
 
-    sessions[key].updatedAt = new Date().toISOString();
-    saveSessions(sessions);
+    session.updatedAt = new Date().toISOString();
+    saveSession(number, session);
 }
 
 function clearSession(senderId) {
-    const sessions = loadSessions();
-    const key = normalizeJid(senderId);
-    delete sessions[key];
-    saveSessions(sessions);
+    const number = normalizeJid(senderId);
+    const filePath = getSessionPath(number);
+    try {
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+        }
+    } catch (e) {
+        console.error('❌ Error clearing session:', e.message);
+    }
 }
 
 // ========== COMMAND HANDLER ==========
@@ -250,11 +275,11 @@ async function csbotCommand(sock, chatId, message, args, senderIsOwner) {
             if (disabled.length === 0) {
                 msg += `*Daftar Nonaktif:* (kosong — semua nomor aktif)`;
             } else {
-                const sessions = loadSessions();
+                const sessionNumbers = getAllSessionNumbers();
                 msg += `*Daftar Nonaktif (${disabled.length} nomor):*\n`;
                 disabled.forEach((jid, i) => {
                     const number = normalizeJid(jid);
-                    const hasSession = sessions[number] ? ' 📝' : '';
+                    const hasSession = sessionNumbers.includes(number) ? ' 📝' : '';
                     msg += `${i + 1}. ${number}${hasSession}\n`;
                 });
             }
@@ -403,10 +428,9 @@ async function csbotCommand(sock, chatId, message, args, senderIsOwner) {
                 return;
             }
 
-            const sessions = loadSessions();
-            if (sessions[normalizedTarget]) {
-                delete sessions[normalizedTarget];
-                saveSessions(sessions);
+            const sessionFile = getSessionPath(normalizedTarget);
+            if (fs.existsSync(sessionFile)) {
+                fs.unlinkSync(sessionFile);
                 await sock.sendMessage(chatId, {
                     text: `🗑️ Session chat untuk *${normalizedTarget}* berhasil dihapus.`
                 }, { quoted: message });
@@ -419,9 +443,20 @@ async function csbotCommand(sock, chatId, message, args, senderIsOwner) {
         }
 
         if (subCommand === 'clearchat') {
-            saveSessions({});
+            let deleted = 0;
+            try {
+                if (fs.existsSync(SESI_DIR)) {
+                    const files = fs.readdirSync(SESI_DIR).filter(f => f.endsWith('.json'));
+                    for (const file of files) {
+                        fs.unlinkSync(path.join(SESI_DIR, file));
+                        deleted++;
+                    }
+                }
+            } catch (e) {
+                console.error('❌ Error clearing all sessions:', e.message);
+            }
             await sock.sendMessage(chatId, {
-                text: '🗑️ *Semua session chat berhasil dihapus.*'
+                text: `🗑️ *Semua session chat berhasil dihapus.* (${deleted} file)`
             }, { quoted: message });
             return;
         }
@@ -564,7 +599,7 @@ module.exports = {
     isAiDisabled,
     clearSession,
     loadDisabled,
-    loadSessions,
+    getAllSessionNumbers,
     isGlobalEnabled,
     setGlobalEnabled,
     recordOwnerMessage
