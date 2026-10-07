@@ -66,16 +66,48 @@ Jika user minta bicara dengan owner, beritahu bahwa owner akan dihubungi.`;
 
 // ========== DATA LOADER ==========
 
-function loadDisabled() {
+// Format baru aiDisabled.json:
+// { "globalEnabled": true, "disabledList": ["628xxx@s.whatsapp.net", ...] }
+// Backward compat: jika file masih array, dianggap globalEnabled=true + disabledList=array tsb.
+function loadAiData() {
     try {
-        return JSON.parse(fs.readFileSync(AI_DISABLED_PATH, 'utf8'));
+        const raw = JSON.parse(fs.readFileSync(AI_DISABLED_PATH, 'utf8'));
+        // Format lama (array) → migrasi ke format baru
+        if (Array.isArray(raw)) {
+            return { globalEnabled: true, disabledList: raw };
+        }
+        // Format baru (objek)
+        return {
+            globalEnabled: typeof raw.globalEnabled === 'boolean' ? raw.globalEnabled : true,
+            disabledList: Array.isArray(raw.disabledList) ? raw.disabledList : []
+        };
     } catch {
-        return [];
+        return { globalEnabled: true, disabledList: [] };
     }
 }
 
-function saveDisabled(data) {
+function saveAiData(data) {
     fs.writeFileSync(AI_DISABLED_PATH, JSON.stringify(data, null, 2));
+}
+
+function loadDisabled() {
+    return loadAiData().disabledList;
+}
+
+function isGlobalEnabled() {
+    return loadAiData().globalEnabled;
+}
+
+function setGlobalEnabled(enabled) {
+    const data = loadAiData();
+    data.globalEnabled = !!enabled;
+    saveAiData(data);
+}
+
+function saveDisabled(list) {
+    const data = loadAiData();
+    data.disabledList = list;
+    saveAiData(data);
 }
 
 function loadSessions() {
@@ -170,7 +202,9 @@ async function csbotCommand(sock, chatId, message, args, senderIsOwner) {
             let helpText = `🤖 *CS AI Bot — Auto Reply*\n\n` +
                           `Fitur auto-reply AI untuk setiap pesan masuk di chat pribadi.\n\n` +
                           `*Commands:*\n` +
-                          `• \`.ai status\` — Lihat daftar nomor yang dinonaktifkan\n` +
+                          `• \`.ai status\` — Status global + daftar nomor nonaktif\n` +
+                          `• \`.ai on global\` — Aktifkan CS AI secara global (default)\n` +
+                          `• \`.ai off global\` — Nonaktifkan CS AI secara global\n` +
                           `• \`.ai off\` — Nonaktifkan CS AI (di chat pribadi, otomatis target lawan bicara)\n` +
                           `• \`.ai off <nomor>\` — Nonaktifkan CS AI untuk nomor tertentu\n` +
                           `• \`.ai on <nomor>\` — Aktifkan kembali CS AI untuk nomor tsb\n` +
@@ -190,23 +224,41 @@ async function csbotCommand(sock, chatId, message, args, senderIsOwner) {
 
         if (subCommand === 'status') {
             const disabled = loadDisabled();
+            const globalEnabled = isGlobalEnabled();
+            const globalStatus = globalEnabled ? '🟢 *AKTIF* (semua nomor dijawab kecuali daftar nonaktif)' : '🔴 *NONAKTIF* (tidak ada yang dijawab)';
+
+            let msg = `🤖 *Status CS AI*\n\n`;
+            msg += `*Global:* ${globalStatus}\n\n`;
+
             if (disabled.length === 0) {
-                await sock.sendMessage(chatId, {
-                    text: '✅ *Semua nomor aktif*\n\nTidak ada nomor yang menonaktifkan CS AI saat ini.'
-                }, { quoted: message });
-                return;
+                msg += `*Daftar Nonaktif:* (kosong — semua nomor aktif)`;
+            } else {
+                const sessions = loadSessions();
+                msg += `*Daftar Nonaktif (${disabled.length} nomor):*\n`;
+                disabled.forEach((jid, i) => {
+                    const number = normalizeJid(jid);
+                    const hasSession = sessions[number] ? ' 📝' : '';
+                    msg += `${i + 1}. ${number}${hasSession}\n`;
+                });
             }
 
-            const sessions = loadSessions();
-            let msg = '🚫 *Daftar Nomor Nonaktif CS AI:*\n\n';
-            disabled.forEach((jid, i) => {
-                const number = normalizeJid(jid);
-                const hasSession = sessions[number] ? ' (ada session)' : '';
-                msg += `${i + 1}. ${number}${hasSession}\n`;
-            });
-            msg += `\nTotal: ${disabled.length} nomor`;
-
             await sock.sendMessage(chatId, { text: msg }, { quoted: message });
+            return;
+        }
+
+        if (subCommand === 'off' && args[1] === 'global') {
+            setGlobalEnabled(false);
+            await sock.sendMessage(chatId, {
+                text: '🔴 *CS AI Dimatikan Secara Global*\n\nSemua nomor tidak akan dijawab oleh AI. Gunakan `.ai on global` untuk mengaktifkan kembali.'
+            }, { quoted: message });
+            return;
+        }
+
+        if (subCommand === 'on' && args[1] === 'global') {
+            setGlobalEnabled(true);
+            await sock.sendMessage(chatId, {
+                text: '🟢 *CS AI Diaktifkan Secara Global*\n\nSemua nomor akan dijawab oleh AI (kecuali yang ada di daftar nonaktif).'
+            }, { quoted: message });
             return;
         }
 
@@ -378,6 +430,11 @@ async function csbotCommand(sock, chatId, message, args, senderIsOwner) {
  */
 async function handleCsAutoReply(sock, chatId, message, userMessage, senderId, config) {
     try {
+        // Cek global flag — jika nonaktif global, skip semua
+        if (!isGlobalEnabled()) {
+            return;
+        }
+
         // Cek apakah nomor ini dinonaktifkan
         if (isAiDisabled(senderId)) {
             return; // Skip, jangan jawab
@@ -463,5 +520,7 @@ module.exports = {
     isAiDisabled,
     clearSession,
     loadDisabled,
-    loadSessions
+    loadSessions,
+    isGlobalEnabled,
+    setGlobalEnabled
 };
