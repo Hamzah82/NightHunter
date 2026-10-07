@@ -96,6 +96,7 @@ const githubCommand = require('./commands/github');
 const { handleAntiBadwordCommand, handleBadwordDetection } = require('./lib/antibadword');
 const antibadwordCommand = require('./commands/antibadword');
 const { handleChatbotCommand, handleChatbotResponse } = require('./commands/chatbot');
+const { csbotCommand, handleCsAutoReply } = require('./commands/csbot');
 const { takeCommand, resolveTakeSelection } = require('./commands/take');
 const { getPending, clearPending } = require('./lib/pendingSelection');
 const { saveCommand, getCommand, notesCommand } = require('./commands/save');
@@ -336,6 +337,22 @@ async function handleMessages(sock, messageUpdate, printLog) {
                 if (isPublic || isOwnerOrSudoCheck) {
                     await handleChatbotResponse(sock, chatId, message, userMessage, senderId);
                 }
+            } else {
+                // PRIVATE CHAT: CS AI Auto-Reply for non-command messages
+                if (!message.key.fromMe && userMessage) {
+                    // Baca konfigurasi jarvis untuk API credentials
+                    let jarvisConfig = null;
+                    try {
+                        jarvisConfig = JSON.parse(fs.readFileSync('./jarvis.json'));
+                    } catch (e) {
+                        // jarvis.json not configured yet, skip auto-reply
+                    }
+                    
+                    if (jarvisConfig && jarvisConfig.api_key && jarvisConfig.api_url &&
+                        !jarvisConfig.api_key.includes('your_') && jarvisConfig.api_key !== '') {
+                        await handleCsAutoReply(sock, chatId, message, userMessage, senderId, jarvisConfig);
+                    }
+                }
             }
             return;
         }
@@ -349,7 +366,7 @@ async function handleMessages(sock, messageUpdate, printLog) {
         const isAdminCommand = adminCommands.some(cmd => userMessage.startsWith(cmd));
 
         // List of owner commands
-        const ownerCommands = ['.mode', '.autostatus', '.antidelete', '.cleartmp', '.setpp', '.clearsession', '.areact', '.autoreact', '.autotyping', '.autoread', '.pmblocker', '.clonegb', '.save', '.get', '.notes', '.blocklist', '.unblock', '.take'];
+        const ownerCommands = ['.mode', '.autostatus', '.antidelete', '.cleartmp', '.setpp', '.clearsession', '.areact', '.autoreact', '.autotyping', '.autoread', '.pmblocker', '.clonegb', '.save', '.get', '.notes', '.blocklist', '.unblock', '.take', '.ai'];
         const isOwnerCommand = ownerCommands.some(cmd => userMessage.startsWith(cmd));
 
         let isSenderAdmin = false;
@@ -1014,6 +1031,13 @@ async function handleMessages(sock, messageUpdate, printLog) {
             case userMessage.startsWith('.jarvis'):
                 const jarvisText = rawText.slice(7).trim();
                 await jarvisCommand(sock, chatId, message, jarvisText);
+                commandExecuted = true;
+                break;
+            case userMessage.startsWith('.ai'):
+                {
+                    const aiArgs = rawText.slice(3).trim().split(/\s+/);
+                    await csbotCommand(sock, chatId, message, aiArgs, isOwnerOrSudoCheck);
+                }
                 commandExecuted = true;
                 break;
             case userMessage.startsWith('.translate') || userMessage.startsWith('.trt'):

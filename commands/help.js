@@ -138,9 +138,11 @@ async function helpCommand(sock, chatId, message) {
 🤖 *AI Commands*:
 ║ ➤ .gpt <question>
 ║ ➤ .gemini <question>
+║ ➤ .jarvis <question>
 ║ ➤ .imagine <prompt>
 ║ ➤ .flux <prompt>
 ║ ➤ .sora <prompt>
+║ ➤ .ai <on/off/status/clear>
 ╚═══════════════════╝
 
 ╔═══════════════════╗
