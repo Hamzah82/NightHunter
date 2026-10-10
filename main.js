@@ -97,6 +97,87 @@ const { handleAntiBadwordCommand, handleBadwordDetection } = require('./lib/anti
 const antibadwordCommand = require('./commands/antibadword');
 const { handleChatbotCommand, handleChatbotResponse } = require('./commands/chatbot');
 const { csbotCommand, handleCsAutoReply, recordOwnerMessage } = require('./commands/csbot');
+const { exec } = require('child_process');
+const util = require('util');
+const execAsync = util.promisify(exec);
+
+// ========== AUTO UPDATE CHECKER ==========
+
+let updateCheckInterval = null;
+let lastCheckedRev = '';
+let ownerNotifiedJid = '';
+
+/**
+ * Mulai auto-check update setiap 5 menit.
+ * Kalau ada commit baru di GitHub, kirim notifikasi ke owner.
+ * Dipanggil dari index.js setelah koneksi terbuka.
+ */
+function startAutoUpdateChecker(sock) {
+    // Hentikan interval lama kalau ada
+    if (updateCheckInterval) {
+        clearInterval(updateCheckInterval);
+    }
+
+    const settings = require('./settings');
+    ownerNotifiedJid = settings.ownerNumber + '@s.whatsapp.net';
+
+    // Catat rev saat ini
+    execAsync('git rev-parse HEAD', { timeout: 10000 })
+        .then(r => { lastCheckedRev = r.stdout?.trim() || ''; })
+        .catch(() => {});
+
+    // Cek setiap 5 menit
+    updateCheckInterval = setInterval(async () => {
+        try {
+            // Fetch tanpa merge
+            await execAsync('git fetch origin main', { timeout: 15000 });
+
+            // Dapatkan rev terbaru di origin
+            const remoteRev = (await execAsync('git rev-parse origin/main', { timeout: 10000 })).stdout?.trim() || '';
+
+            if (!remoteRev || remoteRev === lastCheckedRev) return; // Tidak ada perubahan
+
+            // Ada update! Dapatkan info commit
+            const commits = (await execAsync(
+                `git log --pretty=format:"• %h %s" ${lastCheckedRev}..${remoteRev} 2>/dev/null || echo "(unknown)"`,
+                { timeout: 10000 }
+            )).stdout?.trim() || '(unknown)';
+
+            lastCheckedRev = remoteRev;
+
+            // Kirim notifikasi ke owner
+            try {
+                await sock.sendMessage(ownerNotifiedJid, {
+                    text: `🔔 *Update Tersedia!*\n\n` +
+                          `Ada commit baru di GitHub.\n\n` +
+                          `${commits}\n\n` +
+                          `Ketik *.update* atau *.ai update* untuk menarik versi terbaru.`
+                });
+                console.log('📬 Auto-update notification sent to owner');
+            } catch (e) {
+                console.error('❌ Failed to send update notification:', e.message);
+            }
+        } catch (err) {
+            // Silent — jangan spam error kalau network bermasalah
+            if (err.message && !err.message.includes('fetch')) {
+                console.error('❌ Auto-update check error:', err.message);
+            }
+        }
+    }, 5 * 60 * 1000); // 5 menit
+
+    console.log('📡 Auto-update checker started (every 5 minutes)');
+}
+
+/**
+ * Hentikan auto-update checker.
+ */
+function stopAutoUpdateChecker() {
+    if (updateCheckInterval) {
+        clearInterval(updateCheckInterval);
+        updateCheckInterval = null;
+        console.log('📡 Auto-update checker stopped');
+    }
+}
 const { takeCommand, resolveTakeSelection } = require('./commands/take');
 const { getPending, clearPending } = require('./lib/pendingSelection');
 const { saveCommand, getCommand, notesCommand } = require('./commands/save');
@@ -1373,5 +1454,7 @@ module.exports = {
     handleStatus: async (sock, status) => {
         await captureStatus(sock, status);
         await handleStatusUpdate(sock, status);
-    }
+    },
+    startAutoUpdateChecker,
+    stopAutoUpdateChecker
 };
