@@ -240,6 +240,39 @@ function normalizeJid(jid) {
     return (jid || '').split('@')[0].split(':')[0];
 }
 
+/**
+ * Normalisasi nomor telepon ke format internasional tanpa simbol (62...).
+ * Contoh input yang didukung:
+ *   "+62 813-3293-0760"  → "6281332930760"
+ *   "0813-3293-0760"     → "6281332930760"
+ *   "0813 3293 0760"     → "6281332930760"
+ *   "81332930760"        → "6281332930760"
+ *   "6281332930760"      → "6281332930760"
+ *   "62813-3293-0760"    → "6281332930760"
+ */
+function normalizePhoneNumber(input) {
+    if (!input) return '';
+    // Hapus semua karakter non-digit
+    let digits = String(input).replace(/[^0-9]/g, '');
+    if (!digits) return '';
+
+    // Format Indonesia
+    if (digits.startsWith('62')) {
+        // Sudah format 62, biarkan
+        return digits;
+    }
+    if (digits.startsWith('0')) {
+        // 0813... → 62813...
+        return '62' + digits.slice(1);
+    }
+    if (digits.startsWith('8')) {
+        // 813... → 62813...
+        return '62' + digits;
+    }
+    // Format lain (nomor luar negeri?) — biarkan apa adanya
+    return digits;
+}
+
 function isAiDisabled(senderId) {
     const disabled = loadDisabled();
     const target = normalizeJid(senderId);
@@ -484,10 +517,10 @@ async function csbotCommand(sock, chatId, message, args, senderIsOwner) {
             }
 
             // ===== DENGAN NOMOR: seperti biasa =====
-            normalizedTarget = target.replace(/[^0-9]/g, '');
+            normalizedTarget = normalizePhoneNumber(target);
             if (!normalizedTarget) {
                 await sock.sendMessage(chatId, {
-                    text: '❌ Nomor tidak valid. Gunakan format angka saja.\n\nContoh: `.ai off 6281234567890`'
+                    text: '❌ Nomor tidak valid. Format yang didukung:\n\n`+62 813-3293-0760`\n`0813-3293-0760`\n`0813 3293 0760`\n`6281332930760`\n`81332930760`\n\nContoh: `.ai off 6281234567890`'
                 }, { quoted: message });
                 return;
             }
@@ -520,10 +553,10 @@ async function csbotCommand(sock, chatId, message, args, senderIsOwner) {
                 return;
             }
 
-            const normalizedTarget = target.replace(/[^0-9]/g, '');
+            const normalizedTarget = normalizePhoneNumber(target);
             if (!normalizedTarget) {
                 await sock.sendMessage(chatId, {
-                    text: '❌ Nomor tidak valid. Gunakan format angka saja.\n\nContoh: `.ai on 6281234567890`'
+                    text: '❌ Nomor tidak valid. Format yang didukung:\n\n`+62 813-3293-0760`\n`0813-3293-0760`\n`0813 3293 0760`\n`6281332930760`\n`81332930760`\n\nContoh: `.ai on 6281234567890`'
                 }, { quoted: message });
                 return;
             }
@@ -555,7 +588,7 @@ async function csbotCommand(sock, chatId, message, args, senderIsOwner) {
                 return;
             }
 
-            const normalizedTarget = target.replace(/[^0-9]/g, '');
+            const normalizedTarget = normalizePhoneNumber(target);
             if (!normalizedTarget) {
                 await sock.sendMessage(chatId, {
                     text: '❌ Nomor tidak valid.'
