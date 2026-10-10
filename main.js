@@ -108,7 +108,7 @@ let lastCheckedRev = '';
 let ownerNotifiedJid = '';
 
 /**
- * Mulai auto-check update setiap 5 menit.
+ * Mulai auto-check update setiap 10 detik.
  * Kalau ada commit baru di GitHub, kirim notifikasi ke owner.
  * Dipanggil dari index.js setelah koneksi terbuka.
  */
@@ -163,9 +163,9 @@ function startAutoUpdateChecker(sock) {
                 console.error('❌ Auto-update check error:', err.message);
             }
         }
-    }, 5 * 60 * 1000); // 5 menit
+    }, 10 * 1000); // 10 detik
 
-    console.log('📡 Auto-update checker started (every 5 minutes)');
+    console.log('📡 Auto-update checker started (every 10 seconds)');
 }
 
 /**
