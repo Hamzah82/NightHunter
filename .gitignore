@@ -16,6 +16,8 @@ data/saved_media/
 data/take_media/
 data/sesiAI/*.json
 !data/sesiAI/.gitkeep
+data/catatan/*.json
+!data/catatan/.gitkeep
 baileys_store.json
 
 # Environment variables
