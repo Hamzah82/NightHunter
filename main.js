@@ -5,6 +5,7 @@ const { blocklistCommand, unblockCommand } = require('./commands/blocklist');
 const settingsCommand = require('./commands/settings');
 const soraCommand = require('./commands/sora');
 const jarvisCommand = require('./commands/jarvis');
+const catatanCommand = require('./commands/catatan');
 const fs = require('fs');
 const path = require('path');
 
@@ -1350,6 +1351,13 @@ async function handleMessages(sock, messageUpdate, printLog) {
                 break;
             case userMessage.startsWith('.sora'):
                 await soraCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('.catat'):
+                {
+                    const catatArgs = rawText.slice(6).trim().split(/\s+/);
+                    await catatanCommand(sock, chatId, message, catatArgs, isOwnerOrSudoCheck);
+                }
+                commandExecuted = true;
                 break;
             default:
                 if (isGroup) {
