@@ -639,50 +639,44 @@ async function csbotCommand(sock, chatId, message, args, senderIsOwner) {
                 text: '🔄 *Auto Update* — menarik versi terbaru dari GitHub...'
             }, { quoted: message });
 
-            try {
-                // 1. Git pull
-                const pullResult = await execAsync('git pull origin main', { timeout: 30000 });
-                const pullStdout = pullResult.stdout?.trim() || '';
-                const pullStderr = pullResult.stderr?.trim() || '';
+            // Jalankan update di background biar gak blocking
+            execAsync('git pull origin main', { timeout: 60000 })
+                .then(async (pullResult) => {
+                    const pullStdout = pullResult.stdout?.trim() || '';
 
-                if (pullStdout.includes('Already up to date')) {
+                    if (pullStdout.includes('Already up to date')) {
+                        await sock.sendMessage(chatId, {
+                            text: '✅ *Sudah versi terbaru.*\nTidak ada perubahan yang perlu di-pull.'
+                        }, { quoted: message });
+                        return;
+                    }
+
+                    const changeSummary = pullStdout.split('\n').filter(l => l.startsWith(' ')).slice(0, 10).join('\n') || '(ada perubahan)';
                     await sock.sendMessage(chatId, {
-                        text: '✅ *Sudah versi terbaru.*\nTidak ada perubahan yang perlu di-pull.'
+                        text: `📥 *Update ditarik!*\n\n${changeSummary}\n\n⚙️ Install dependencies & restart...`
                     }, { quoted: message });
-                    return;
-                }
 
-                // 2. Ada perubahan — kasih info
-                const changeSummary = pullStdout.split('\n').filter(l => l.startsWith(' ')).slice(0, 10).join('\n') || '(ada perubahan)';
-                await sock.sendMessage(chatId, {
-                    text: `📥 *Update ditarik!*\n\n${changeSummary}\n\n⚙️ Install dependencies & restart...`
-                }, { quoted: message });
+                    // npm install di background
+                    try {
+                        await execAsync('npm install --no-audit --no-fund', { timeout: 120000 });
+                    } catch (npmErr) {
+                        console.error('npm install error:', npmErr.message);
+                    }
 
-                // 3. npm install
-                try {
-                    await execAsync('npm install --no-audit --no-fund', { timeout: 60000 });
-                } catch (npmErr) {
-                    console.error('npm install error:', npmErr.message);
-                }
+                    // Restart
+                    try {
+                        await execAsync('pm2 restart all', { timeout: 10000 });
+                    } catch {
+                        setTimeout(() => process.exit(0), 1500);
+                    }
+                })
+                .catch(async (err) => {
+                    console.error('❌ AI Update Error:', err);
+                    await sock.sendMessage(chatId, {
+                        text: `❌ *Update gagal:*\n${err.message || err}`
+                    }, { quoted: message });
+                });
 
-                // 4. Restart PM2
-                await sock.sendMessage(chatId, {
-                    text: '♻️ *Restarting PM2...*'
-                }, { quoted: message });
-
-                try {
-                    await execAsync('pm2 restart all', { timeout: 10000 });
-                } catch (pm2Err) {
-                    // Fallback: process exit (panel auto-restart)
-                    setTimeout(() => process.exit(0), 1000);
-                }
-
-            } catch (err) {
-                console.error('❌ AI Update Error:', err);
-                await sock.sendMessage(chatId, {
-                    text: `❌ *Update gagal:*\n${err.message || err}`
-                }, { quoted: message });
-            }
             return;
         }
 
