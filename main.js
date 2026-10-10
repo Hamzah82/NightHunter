@@ -1256,9 +1256,8 @@ async function handleMessages(sock, messageUpdate, printLog) {
                 break;
             case userMessage.startsWith('.update'):
                 {
-                    const parts = rawText.trim().split(/\s+/);
-                    const zipArg = parts[1] && parts[1].startsWith('http') ? parts[1] : '';
-                    await updateCommand(sock, chatId, message, zipArg);
+                    const aiArgs = ['update'];
+                    await csbotCommand(sock, chatId, message, aiArgs, isOwnerOrSudoCheck);
                 }
                 commandExecuted = true;
                 break;
