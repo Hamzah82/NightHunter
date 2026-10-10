@@ -473,7 +473,8 @@ async function csbotCommand(sock, chatId, message, args, senderIsOwner) {
         }
 
         if (subCommand === 'off') {
-            const target = args[1];
+            // Gabungkan sisa args jadi satu string untuk nomor (biar +62 852-2255-8877 gak kepisah)
+            const target = args.slice(1).join(' ').trim();
             let normalizedTarget;
 
             if (!target) {
@@ -545,7 +546,7 @@ async function csbotCommand(sock, chatId, message, args, senderIsOwner) {
         }
 
         if (subCommand === 'on') {
-            const target = args[1];
+            const target = args.slice(1).join(' ').trim();
             if (!target) {
                 await sock.sendMessage(chatId, {
                     text: '❌ Masukkan nomor yang ingin diaktifkan kembali.\n\nContoh: `.ai on 6281234567890`'
@@ -580,7 +581,7 @@ async function csbotCommand(sock, chatId, message, args, senderIsOwner) {
         }
 
         if (subCommand === 'clear') {
-            const target = args[1];
+            const target = args.slice(1).join(' ').trim();
             if (!target) {
                 await sock.sendMessage(chatId, {
                     text: '❌ Masukkan nomor yang sessionnya ingin dihapus.\n\nContoh: `.ai clear 6281234567890`'
