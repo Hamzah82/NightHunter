@@ -47,6 +47,7 @@ const SUPPORTED_FORMATS = ['pdf', 'doc', 'docx', 'odt', 'rtf', 'html', 'txt', 'e
 async function getMediaBufferAndExt(message) {
     const m = message.message || {};
     
+    // Check documentMessage
     if (m.documentMessage) {
         const stream = await downloadContentFromMessage(m.documentMessage, 'document');
         const chunks = [];
@@ -58,6 +59,22 @@ async function getMediaBufferAndExt(message) {
             ext, 
             fileName,
             mimetype: m.documentMessage.mimetype
+        };
+    }
+    
+    // Check documentWithCaptionMessage (new WhatsApp format)
+    if (m.documentWithCaptionMessage) {
+        const docMsg = m.documentWithCaptionMessage;
+        const stream = await downloadContentFromMessage(docMsg, 'document');
+        const chunks = [];
+        for await (const chunk of stream) chunks.push(chunk);
+        const fileName = docMsg.fileName || 'file.bin';
+        const ext = path.extname(fileName).toLowerCase().slice(1) || 'bin';
+        return { 
+            buffer: Buffer.concat(chunks), 
+            ext, 
+            fileName,
+            mimetype: docMsg.mimetype
         };
     }
     
@@ -189,13 +206,6 @@ async function convertCommand(sock, chatId, message, args) {
     // Get media from current message OR quoted message
     let media = await getMediaBufferAndExt(message);
     if (!media) media = await getQuotedMediaBufferAndExt(message);
-    
-    console.log('[CONVERT] Debug:', {
-        hasMedia: !!media,
-        args: args,
-        messageKeys: Object.keys(message.message || {}),
-        quotedKeys: Object.keys(message.message?.extendedTextMessage?.contextInfo?.quotedMessage || {})
-    });
     
     if (!media) {
         await sock.sendMessage(chatId, {
