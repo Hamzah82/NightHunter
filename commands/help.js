@@ -37,6 +37,7 @@ async function helpCommand(sock, chatId, message) {
 ║ ➤ .ss <link>
 ║ ➤ .jid
 ║ ➤ .url
+║ ➤ .convert <format> (reply to document)
 ╚═══════════════════╝ 
 
 ╔═══════════════════╗

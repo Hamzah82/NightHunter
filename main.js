@@ -231,6 +231,7 @@ const stickercropCommand = require('./commands/stickercrop');
 const updateCommand = require('./commands/update');
 const removebgCommand = require('./commands/removebg');
 const { reminiCommand } = require('./commands/remini');
+const convertCommand = require('./commands/convert');
 
 // Global settings
 global.packname = settings.packname;
@@ -967,6 +968,12 @@ async function handleMessages(sock, messageUpdate, printLog) {
                 break;
             case userMessage.startsWith('.tourl') || userMessage.startsWith('.url'):
                 await urlCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('.convert'):
+                {
+                    const convertArgs = rawText.slice(9).trim();
+                    await convertCommand(sock, chatId, message, convertArgs);
+                }
                 break;
             case userMessage.startsWith('.emojimix') || userMessage.startsWith('.emix'):
                 await emojimixCommand(sock, chatId, message);
