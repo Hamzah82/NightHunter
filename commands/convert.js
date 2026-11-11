@@ -64,18 +64,22 @@ async function getMediaBufferAndExt(message) {
     
     // Check documentWithCaptionMessage (new WhatsApp format)
     if (m.documentWithCaptionMessage) {
-        const docMsg = m.documentWithCaptionMessage;
-        const stream = await downloadContentFromMessage(docMsg, 'document');
-        const chunks = [];
-        for await (const chunk of stream) chunks.push(chunk);
-        const fileName = docMsg.fileName || 'file.bin';
-        const ext = path.extname(fileName).toLowerCase().slice(1) || 'bin';
-        return { 
-            buffer: Buffer.concat(chunks), 
-            ext, 
-            fileName,
-            mimetype: docMsg.mimetype
-        };
+        // documentWithCaptionMessage contains message property with the actual document
+        const innerMsg = m.documentWithCaptionMessage.message;
+        if (innerMsg?.documentMessage) {
+            const docMsg = innerMsg.documentMessage;
+            const stream = await downloadContentFromMessage(docMsg, 'document');
+            const chunks = [];
+            for await (const chunk of stream) chunks.push(chunk);
+            const fileName = docMsg.fileName || 'file.bin';
+            const ext = path.extname(fileName).toLowerCase().slice(1) || 'bin';
+            return { 
+                buffer: Buffer.concat(chunks), 
+                ext, 
+                fileName,
+                mimetype: docMsg.mimetype
+            };
+        }
     }
     
     if (m.imageMessage) {
