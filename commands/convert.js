@@ -190,6 +190,13 @@ async function convertCommand(sock, chatId, message, args) {
     let media = await getMediaBufferAndExt(message);
     if (!media) media = await getQuotedMediaBufferAndExt(message);
     
+    console.log('[CONVERT] Debug:', {
+        hasMedia: !!media,
+        args: args,
+        messageKeys: Object.keys(message.message || {}),
+        quotedKeys: Object.keys(message.message?.extendedTextMessage?.contextInfo?.quotedMessage || {})
+    });
+    
     if (!media) {
         await sock.sendMessage(chatId, {
             text: `📋 *Document Converter*
