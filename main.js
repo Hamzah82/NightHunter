@@ -319,6 +319,8 @@ async function handleMessages(sock, messageUpdate, printLog) {
             message.message?.extendedTextMessage?.text?.trim() ||
             message.message?.imageMessage?.caption?.trim() ||
             message.message?.videoMessage?.caption?.trim() ||
+            message.message?.documentMessage?.caption?.trim() ||
+            message.message?.documentWithCaptionMessage?.message?.documentMessage?.caption?.trim() ||
             message.message?.buttonsResponseMessage?.selectedButtonId?.trim() ||
             ''
         ).toLowerCase().replace(/\.\s+/g, '.').trim();
@@ -328,6 +330,8 @@ async function handleMessages(sock, messageUpdate, printLog) {
             message.message?.extendedTextMessage?.text?.trim() ||
             message.message?.imageMessage?.caption?.trim() ||
             message.message?.videoMessage?.caption?.trim() ||
+            message.message?.documentMessage?.caption?.trim() ||
+            message.message?.documentWithCaptionMessage?.message?.documentMessage?.caption?.trim() ||
             '';
 
         // Only log command usage

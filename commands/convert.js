@@ -207,9 +207,16 @@ async function convertDocumentAPI(buffer, inputExt, outputFormat, fileName) {
 }
 
 async function convertCommand(sock, chatId, message, args) {
+    // Debug: Log message structure
+    console.log('📥 .convert called - args:', args);
+    console.log('📤 Message keys:', Object.keys(message.message || {}));
+    
     // Get media from current message OR quoted message
     let media = await getMediaBufferAndExt(message);
+    console.log('📁 Media from current message:', media ? 'Found' : 'Not found');
+    
     if (!media) media = await getQuotedMediaBufferAndExt(message);
+    console.log('📁 Media from quoted message:', media ? 'Found' : 'Not found');
     
     if (!media) {
         await sock.sendMessage(chatId, {
