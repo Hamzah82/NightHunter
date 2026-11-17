@@ -389,6 +389,17 @@ Menampilkan ringkasan commit & file yang berubah.
 
 Owner/sudo only (`isOwnerOrSudo`).
 
+### Notifikasi update otomatis (`lib/updateChecker.js`)
+
+- Dipanggil dari `index.js` saat koneksi WhatsApp `open`; cek langsung lalu setiap 2 menit.
+- Sumber commit: `git fetch origin main` (jika `.git` ada) → `git ls-remote https://github.com/<repo>.git` → GitHub REST (hanya jika `GITHUB_TOKEN` diisi) → Atom feed publik `https://github.com/<repo>/commits/main.atom`.
+- Atom feed dipakai sebagai fallback tanpa token karena API anonim dibatasi 60 request/jam per IP — limit ini sering habis di IP panel bersama dan membuat notifikasi berhenti tanpa error yang terlihat.
+- Target notifikasi dinormalisasi: `UPDATE_NOTIFY_JID` → `OWNER_NUMBER` → JID bot sendiri (suffix device seperti `:12` dibuang).
+- State `data/updateState.json` menyimpan `lastSeenCommit`, `notifiedJids`, `notifiedAt`. Pengiriman dicatat per target, jadi target yang gagal dicoba lagi tanpa mengirim ulang ke target yang sudah sukses.
+- Tanpa `.git` dan tanpa state (instalasi ZIP/panel), cek pertama mengirim "Commit Terbaru" satu kali, bukan mencatat baseline secara diam-diam.
+- Command manual: `.checkupdate` (owner/sudo) dan `.checkupdate test` untuk tes pengiriman ke target notifikasi.
+- Test tanpa WhatsApp: `npm run test:update` (mock git/HTTP).
+
 ---
 
 ## 16. Sistem `.blocklist` & `.unblock` — resolusi LID

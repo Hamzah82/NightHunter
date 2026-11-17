@@ -237,6 +237,8 @@ async function helpCommand(sock, chatId, message) {
 ║ ➤ .sc
 ║ ➤ .script
 ║ ➤ .repo
+║ ➤ .checkupdate
+║ ➤ .checkupdate test
 ╚═══════════════════╝
 `;
 

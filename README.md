@@ -92,6 +92,14 @@ GITHUB_TOKEN=
 - `GITHUB_TOKEN` opsional; hanya perlu untuk repo private atau jika kena rate limit GitHub API.
 - `MEMORY_LIMIT_MB` mengaktifkan auto-restart saat pemakaian RAM melewati batas (biarkan kosong untuk menonaktifkan).
 
+### Notifikasi update
+
+- Bot mengecek commit terbaru setiap 2 menit setelah koneksi WhatsApp terbuka.
+- Target notifikasi: `UPDATE_NOTIFY_JID` (jika diisi), `OWNER_NUMBER`, dan chat bot sendiri.
+- Sumber commit dicoba berurutan: `git fetch` → `git ls-remote` → GitHub API (hanya jika `GITHUB_TOKEN` diisi) → Atom feed `commits/main.atom`. Tanpa token, Atom feed dipakai supaya tidak kena limit API anonim 60 request/jam yang sering habis di IP panel bersama.
+- Di instalasi ZIP/panel tanpa `.git`, pengecekan pertama mengirim info commit terbaru satu kali; setelah itu hanya commit baru yang dikirim.
+- `.checkupdate` untuk cek manual (owner/sudo), `.checkupdate test` untuk mengirim pesan tes ke target notifikasi.
+
 ### Catatan Dependensi
 
 - Konversi dokumen (`.convert`), YouTube (`.song`/`.video`), dan TikTok berjalan penuh dengan library npm — tanpa binary eksternal.

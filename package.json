@@ -12,7 +12,8 @@
     "start:fresh": "npm run reset-session && npm start",
     "install:panel": "npm install --legacy-peer-deps",
     "install:force": "npm install --force",
-    "test": "node scripts/syntax-check.js"
+    "test": "node scripts/syntax-check.js",
+    "test:update": "node scripts/test-update-check.js"
   },
   "keywords": [
     "whatsapp-bot"
