@@ -41,7 +41,7 @@ const FORMAT_MIME = {
 };
 
 // Supported formats
-const SUPPORTED_FORMATS = ['pdf', 'docx', 'html', 'txt', 'xlsx', 'xls', 'ods', 'csv', 'png', 'jpg', 'gif'];
+const SUPPORTED_FORMATS = ['pdf', 'docx', 'html', 'txt', 'xlsx', 'xls', 'ods', 'csv', 'pptx', 'png', 'jpg', 'gif'];
 
 const MIME_EXT = {
     'application/pdf': 'pdf',
@@ -285,6 +285,7 @@ Usage: Reply to a document with .convert <format>
 Supported formats:
 📄 Documents: pdf, docx, html, txt
 📊 Spreadsheets: xlsx, xls, ods, csv
+📽️ Presentations: pptx
 🖼️ Images: png, jpg, gif
 
 Examples:
@@ -324,7 +325,7 @@ Examples:
 
     if (!SUPPORTED_FORMATS.includes(targetFormat)) {
         await sock.sendMessage(chatId, {
-            text: `Unsupported format: "${targetFormat}"\n\nSupported: pdf, docx, html, txt, xlsx, xls, ods, csv, png, jpg, gif`,
+            text: `Unsupported format: "${targetFormat}"\n\nSupported: pdf, docx, html, txt, xlsx, xls, ods, csv, pptx, png, jpg, gif`,
             contextInfo: {
                 forwardingScore: 999,
                 isForwarded: true,
