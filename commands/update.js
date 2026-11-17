@@ -1,24 +1,26 @@
 const { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const https = require('https');
 const settings = require('../settings');
 const isOwnerOrSudo = require('../lib/isOwner');
 
-function run(cmd) {
+const ROOT = path.join(__dirname, '..');
+const SHA_RE = /^[0-9a-f]{7,40}$/i;
+
+function run(cmd, timeout = 180000) {
     return new Promise((resolve, reject) => {
-        exec(cmd, { windowsHide: true }, (err, stdout, stderr) => {
-            if (err) return reject(new Error((stderr || stdout || err.message || '').toString()));
+        exec(cmd, { cwd: ROOT, windowsHide: true, timeout }, (err, stdout, stderr) => {
+            if (err) return reject(new Error((stderr || stdout || err.message || '').toString().trim()));
             resolve((stdout || '').toString());
         });
     });
 }
 
 async function hasGitRepo() {
-    const gitDir = path.join(process.cwd(), '.git');
+    const gitDir = path.join(ROOT, '.git');
     if (!fs.existsSync(gitDir)) return false;
     try {
-        await run('git --version');
+        await run('git --version', 10000);
         return true;
     } catch {
         return false;
@@ -26,14 +28,26 @@ async function hasGitRepo() {
 }
 
 async function updateViaGit() {
-    const oldRev = (await run('git rev-parse HEAD').catch(() => 'unknown')).trim();
-    await run('git fetch --all --prune');
-    const newRev = (await run('git rev-parse origin/main')).trim();
+    const oldRev = (await run('git rev-parse HEAD', 10000).catch(() => 'unknown')).trim();
+    await run('git fetch --all --prune', 60000);
+    const newRev = (await run('git rev-parse origin/main', 10000)).trim();
+
+    // Jangan pernah memasukkan output git mentah ke shell command berikutnya.
+    if (!SHA_RE.test(newRev)) throw new Error(`Ref origin/main tidak valid: ${newRev}`);
+    if (oldRev !== 'unknown' && !SHA_RE.test(oldRev)) throw new Error(`HEAD tidak valid: ${oldRev}`);
+
     const alreadyUpToDate = oldRev === newRev;
-    const commits = alreadyUpToDate ? '' : await run(`git log --pretty=format:"%h %s (%an)" ${oldRev}..${newRev}`).catch(() => '');
-    const files = alreadyUpToDate ? '' : await run(`git diff --name-status ${oldRev} ${newRev}`).catch(() => '');
-    await run(`git reset --hard ${newRev}`);
-    await run('git clean -fd');
+    const commits = alreadyUpToDate
+        ? ''
+        : await run(`git log --pretty=format:"%h %s (%an)" ${oldRev}..${newRev}`, 15000).catch(() => '');
+    const files = alreadyUpToDate
+        ? ''
+        : await run(`git diff --name-status ${oldRev} ${newRev}`, 15000).catch(() => '');
+
+    await run(`git reset --hard ${newRev}`, 30000);
+    // -e melindungi aset runtime yang tidak di-track git (mis. hasil .setmention).
+    await run("git clean -fd -e 'assets/mention_custom.*'", 30000);
+
     return { oldRev, newRev, alreadyUpToDate, commits, files };
 }
 
@@ -75,6 +89,9 @@ function downloadFile(url, dest, visited = new Set()) {
                     fs.unlink(dest, () => reject(err));
                 });
             });
+
+            // Jangan menggantung selamanya kalau koneksi panel macet.
+            req.setTimeout(60000, () => req.destroy(new Error('Download timeout (60s)')));
             req.on('error', err => {
                 fs.unlink(dest, () => reject(err));
             });
@@ -93,21 +110,21 @@ async function extractZip(zipPath, outDir) {
     }
     // Linux/mac: try unzip, else 7z, else busybox unzip
     try {
-        await run('command -v unzip');
-        await run(`unzip -o '${zipPath}' -d '${outDir}'`);
+        await run('command -v unzip', 10000);
+        await run(`unzip -o '${zipPath}' -d '${outDir}'`, 120000);
         return;
     } catch {}
     try {
-        await run('command -v 7z');
-        await run(`7z x -y '${zipPath}' -o'${outDir}'`);
+        await run('command -v 7z', 10000);
+        await run(`7z x -y '${zipPath}' -o'${outDir}'`, 120000);
         return;
     } catch {}
     try {
-        await run('busybox unzip -h');
-        await run(`busybox unzip -o '${zipPath}' -d '${outDir}'`);
+        await run('busybox unzip -h', 10000);
+        await run(`busybox unzip -o '${zipPath}' -d '${outDir}'`, 120000);
         return;
     } catch {}
-    throw new Error("No system unzip tool found (unzip/7z/busybox). Git mode is recommended on this panel.");
+    throw new Error('No system unzip tool found (unzip/7z/busybox). Git mode is recommended on this panel.');
 }
 
 function copyRecursive(src, dest, ignore = [], relative = '', outList = []) {
@@ -126,12 +143,12 @@ function copyRecursive(src, dest, ignore = [], relative = '', outList = []) {
     }
 }
 
-async function updateViaZip(sock, chatId, message, zipOverride) {
+async function updateViaZip(zipOverride) {
     const zipUrl = (zipOverride || settings.updateZipUrl || process.env.UPDATE_ZIP_URL || '').trim();
     if (!zipUrl) {
         throw new Error('No ZIP URL configured. Set settings.updateZipUrl or UPDATE_ZIP_URL env.');
     }
-    const tmpDir = path.join(process.cwd(), 'tmp');
+    const tmpDir = path.join(ROOT, 'tmp');
     if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
     const zipPath = path.join(tmpDir, 'update.zip');
     await downloadFile(zipUrl, zipPath);
@@ -139,14 +156,21 @@ async function updateViaZip(sock, chatId, message, zipOverride) {
     if (fs.existsSync(extractTo)) fs.rmSync(extractTo, { recursive: true, force: true });
     await extractZip(zipPath, extractTo);
 
-    // Find the top-level extracted folder (GitHub zips create REPO-branch folder)
-    const [root] = fs.readdirSync(extractTo).map(n => path.join(extractTo, n));
-    const srcRoot = fs.existsSync(root) && fs.lstatSync(root).isDirectory() ? root : extractTo;
+    // GitHub zips create a REPO-branch folder. Pick the entry that really
+    // contains package.json so a wrong/partial archive cannot overwrite the bot.
+    const entries = fs.readdirSync(extractTo).map(n => path.join(extractTo, n));
+    const srcRoot = entries.find(p => fs.existsSync(path.join(p, 'package.json'))) || extractTo;
+    if (!fs.existsSync(path.join(srcRoot, 'package.json'))) {
+        fs.rmSync(extractTo, { recursive: true, force: true });
+        fs.rmSync(zipPath, { force: true });
+        throw new Error('Isi ZIP tidak valid: package.json tidak ditemukan.');
+    }
 
     // Copy over while preserving runtime dirs/files
-    const ignore = ['node_modules', '.git', 'session', 'tmp', 'tmp/', 'temp', 'data', 'baileys_store.json'];
+    const ignore = ['node_modules', '.git', 'session', 'tmp', 'tmp/', 'temp', 'data', 'baileys_store.json', '.env'];
     const copied = [];
-    // Preserve ownerNumber from existing settings.js if present
+
+    // Preserve ownerNumber/botOwner from existing settings.js if present
     let preservedOwner = null;
     let preservedBotOwner = null;
     try {
@@ -154,10 +178,12 @@ async function updateViaZip(sock, chatId, message, zipOverride) {
         preservedOwner = currentSettings && currentSettings.ownerNumber ? String(currentSettings.ownerNumber) : null;
         preservedBotOwner = currentSettings && currentSettings.botOwner ? String(currentSettings.botOwner) : null;
     } catch {}
-    copyRecursive(srcRoot, process.cwd(), ignore, '', copied);
+
+    copyRecursive(srcRoot, ROOT, ignore, '', copied);
+
     if (preservedOwner) {
         try {
-            const settingsPath = path.join(process.cwd(), 'settings.js');
+            const settingsPath = path.join(ROOT, 'settings.js');
             if (fs.existsSync(settingsPath)) {
                 let text = fs.readFileSync(settingsPath, 'utf8');
                 text = text.replace(/ownerNumber:\s*'[^']*'/, `ownerNumber: '${preservedOwner}'`);
@@ -168,23 +194,27 @@ async function updateViaZip(sock, chatId, message, zipOverride) {
             }
         } catch {}
     }
+
     // Cleanup extracted directory
     try { fs.rmSync(extractTo, { recursive: true, force: true }); } catch {}
     try { fs.rmSync(zipPath, { force: true }); } catch {}
     return { copiedFiles: copied };
 }
 
-async function restartProcess(sock, chatId, message) {
+async function restartProcess() {
+    // Restart only this process when PM2 exposes its id; `pm2 restart all`
+    // would also bounce unrelated apps hosted on the same panel.
+    if (process.env.pm_id) {
+        try {
+            await run(`pm2 restart ${process.env.pm_id}`, 20000);
+            return;
+        } catch {}
+    }
     try {
-        await sock.sendMessage(chatId, { text: '✅ Update complete! Restarting…' }, { quoted: message });
-    } catch {}
-    try {
-        // Preferred: PM2
-        await run('pm2 restart all');
+        await run('pm2 restart all', 20000);
         return;
     } catch {}
     // Panels usually auto-restart when the process exits.
-    // Exit after a short delay to allow the above message to flush.
     setTimeout(() => {
         process.exit(0);
     }, 500);
@@ -193,39 +223,41 @@ async function restartProcess(sock, chatId, message) {
 async function updateCommand(sock, chatId, message, zipOverride) {
     const senderId = message.key.participant || message.key.remoteJid;
     const isOwner = await isOwnerOrSudo(senderId, sock, chatId);
-    
+
     if (!message.key.fromMe && !isOwner) {
         await sock.sendMessage(chatId, { text: 'Only bot owner or sudo can use .update' }, { quoted: message });
         return;
     }
+
     try {
-        // Minimal UX
-        await sock.sendMessage(chatId, { text: '🔄 Updating the bot, please wait…' }, { quoted: message });
+        await sock.sendMessage(chatId, { text: '🔄 *Update bot dimulai...*' }, { quoted: message });
+
+        let summary;
         if (await hasGitRepo()) {
-            // silent
-            const { oldRev, newRev, alreadyUpToDate, commits, files } = await updateViaGit();
-            // Short message only: version info
-            const summary = alreadyUpToDate ? `✅ Already up to date: ${newRev}` : `✅ Updated to ${newRev}`;
-            console.log('[update] summary generated');
-            // silent
-            await run('npm install --no-audit --no-fund');
+            const { newRev, alreadyUpToDate, commits } = await updateViaGit();
+            summary = alreadyUpToDate
+                ? `✅ Sudah versi terbaru (${newRev.slice(0, 7)}).`
+                : `✅ Diperbarui ke ${newRev.slice(0, 7)}.\n\n${commits || '(tanpa ringkasan commit)'}`;
+
+            try {
+                await run('npm install --no-audit --no-fund', 300000);
+            } catch (npmError) {
+                console.error('[update] npm install gagal:', npmError.message);
+                summary += '\n\n⚠️ npm install gagal, cek log panel.';
+            }
         } else {
-            const { copiedFiles } = await updateViaZip(sock, chatId, message, zipOverride);
-            // silent
+            const { copiedFiles } = await updateViaZip(zipOverride);
+            summary = `✅ Update ZIP selesai (${copiedFiles.length} file).`;
         }
-        try {
-            const v = require('../settings').version || '';
-            await sock.sendMessage(chatId, { text: `✅ Update done. Restarting…` }, { quoted: message });
-        } catch {
-            await sock.sendMessage(chatId, { text: '✅ Restared Successfully\n Type .ping to check latest version.' }, { quoted: message });
-        }
-        await restartProcess(sock, chatId, message);
-    } catch (err) {
-        console.error('Update failed:', err);
-        await sock.sendMessage(chatId, { text: `❌ Update failed:\n${String(err.message || err)}` }, { quoted: message });
+
+        await sock.sendMessage(chatId, { text: `${summary}\n\n♻️ Restart bot...` }, { quoted: message });
+        await restartProcess();
+    } catch (error) {
+        console.error('[update] gagal:', error);
+        await sock.sendMessage(chatId, {
+            text: `❌ Update gagal:\n${String(error.message || error).slice(0, 500)}`
+        }, { quoted: message });
     }
 }
 
 module.exports = updateCommand;
-
-

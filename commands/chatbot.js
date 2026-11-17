@@ -5,8 +5,10 @@ const fetch = require('node-fetch');
 const USER_GROUP_DATA = path.join(__dirname, '../data/userGroupData.json');
 
 // In-memory storage for chat history and user info
+const MAX_CHAT_MEMORY_USERS = 500;
+
 const chatMemory = {
-    messages: new Map(), // Stores last 5 messages per user
+    messages: new Map(), // Stores last 20 messages per user
     userInfo: new Map()  // Stores user information
 };
 
@@ -245,6 +247,13 @@ async function handleChatbotResponse(sock, chatId, message, userMessage, senderI
         if (!chatMemory.messages.has(senderId)) {
             chatMemory.messages.set(senderId, []);
             chatMemory.userInfo.set(senderId, {});
+
+            // Map insertion order = LRU: buang user terlama agar RAM tidak tumbuh tanpa batas.
+            while (chatMemory.messages.size > MAX_CHAT_MEMORY_USERS) {
+                const oldest = chatMemory.messages.keys().next().value;
+                chatMemory.messages.delete(oldest);
+                chatMemory.userInfo.delete(oldest);
+            }
         }
 
         // Extract and update user information

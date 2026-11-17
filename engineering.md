@@ -389,6 +389,13 @@ Menampilkan ringkasan commit & file yang berubah.
 
 Owner/sudo only (`isOwnerOrSudo`).
 
+### Perilaku penting
+
+- `.update` di `main.js` memanggil `commands/update.js` — tidak ada lagi implementasi duplikat di `commands/csbot.js`.
+- Mode Git memvalidasi SHA sebelum `git reset --hard`; `git clean -fd` mengecualikan `assets/mention_custom.*` agar aset `.setmention` tidak terhapus.
+- Restart memakai `pm2 restart <pm_id>` milik proses ini; fallback `pm2 restart all`, lalu `process.exit(0)` untuk panel auto-restart.
+- Mode ZIP memeriksa `package.json` di dalam arsip sebelum menyalin, jadi arsip yang salah tidak menimpa instalasi.
+
 ### Notifikasi update otomatis (`lib/updateChecker.js`)
 
 - Dipanggil dari `index.js` saat koneksi WhatsApp `open`; cek langsung lalu setiap 2 menit.

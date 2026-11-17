@@ -58,7 +58,7 @@ const { tictactoeCommand, handleTicTacToeMove } = require('./commands/tictactoe'
 const { incrementMessageCount, topMembers } = require('./commands/topmembers');
 const ownerCommand = require('./commands/owner');
 const deleteCommand = require('./commands/delete');
-const { handleAntilinkCommand, handleLinkDetection } = require('./commands/antilink');
+const { handleAntilinkCommand } = require('./commands/antilink');
 const { handleAntitagCommand, handleTagDetection } = require('./commands/antitag');
 const { Antilink } = require('./lib/antilink');
 const { handleMentionDetection, mentionToggleCommand, setMentionCommand } = require('./commands/mention');
@@ -93,6 +93,7 @@ const { handleAntiBadwordCommand, handleBadwordDetection } = require('./lib/anti
 const antibadwordCommand = require('./commands/antibadword');
 const { handleChatbotCommand, handleChatbotResponse } = require('./commands/chatbot');
 const { csbotCommand, handleCsAutoReply, recordOwnerMessage } = require('./commands/csbot');
+const updateCommand = require('./commands/update');
 const { createUpdateChecker } = require('./lib/updateChecker');
 
 // ========== AUTO UPDATE CHECKER ==========
@@ -1308,11 +1309,8 @@ async function handleMessages(sock, messageUpdate, printLog) {
                     commandExecuted = true;
                 }
                 break;
-            case userMessage.startsWith('.update'):
-                {
-                    const aiArgs = ['update'];
-                    await csbotCommand(sock, chatId, message, aiArgs, isOwnerOrSudoCheck);
-                }
+            case userMessage === '.update' || userMessage.startsWith('.update '):
+                await updateCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
             case userMessage.startsWith('.removebg') || userMessage.startsWith('.rmbg') || userMessage.startsWith('.nobg'):

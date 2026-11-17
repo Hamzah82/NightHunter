@@ -1,5 +1,4 @@
 const axios = require('axios');
-const { fetchBuffer } = require('../lib/myfunc');
 
 // The flux model backing Pollinations barely understands non-English
 // prompts (e.g. Indonesian "paus" - whale - renders as an unrelated

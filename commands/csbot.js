@@ -631,52 +631,8 @@ async function csbotCommand(sock, chatId, message, args, senderIsOwner) {
         }
 
         if (subCommand === 'update') {
-            const { exec } = require('child_process');
-            const util = require('util');
-            const execAsync = util.promisify(exec);
-
-            await sock.sendMessage(chatId, {
-                text: '🔄 *Auto Update* — menarik versi terbaru dari GitHub...'
-            }, { quoted: message });
-
-            // Jalankan update di background biar gak blocking
-            execAsync('git pull origin main', { timeout: 60000 })
-                .then(async (pullResult) => {
-                    const pullStdout = pullResult.stdout?.trim() || '';
-
-                    if (pullStdout.includes('Already up to date')) {
-                        await sock.sendMessage(chatId, {
-                            text: '✅ *Sudah versi terbaru.*\nTidak ada perubahan yang perlu di-pull.'
-                        }, { quoted: message });
-                        return;
-                    }
-
-                    const changeSummary = pullStdout.split('\n').filter(l => l.startsWith(' ')).slice(0, 10).join('\n') || '(ada perubahan)';
-                    await sock.sendMessage(chatId, {
-                        text: `📥 *Update ditarik!*\n\n${changeSummary}\n\n⚙️ Install dependencies & restart...`
-                    }, { quoted: message });
-
-                    // npm install di background
-                    try {
-                        await execAsync('npm install --no-audit --no-fund', { timeout: 120000 });
-                    } catch (npmErr) {
-                        console.error('npm install error:', npmErr.message);
-                    }
-
-                    // Restart
-                    try {
-                        await execAsync('pm2 restart all', { timeout: 10000 });
-                    } catch {
-                        setTimeout(() => process.exit(0), 1500);
-                    }
-                })
-                .catch(async (err) => {
-                    console.error('❌ AI Update Error:', err);
-                    await sock.sendMessage(chatId, {
-                        text: `❌ *Update gagal:*\n${err.message || err}`
-                    }, { quoted: message });
-                });
-
+            const updateCommand = require('./update');
+            await updateCommand(sock, chatId, message);
             return;
         }
 
