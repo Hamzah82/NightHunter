@@ -43,6 +43,51 @@ const FORMAT_MIME = {
 // Supported formats
 const SUPPORTED_FORMATS = ['pdf', 'docx', 'html', 'txt', 'xlsx', 'xls', 'ods', 'csv', 'png', 'jpg', 'gif'];
 
+const MIME_EXT = {
+    'application/pdf': 'pdf',
+    'application/msword': 'doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    'application/vnd.ms-excel': 'xls',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+    'application/vnd.oasis.opendocument.spreadsheet': 'ods',
+    'application/vnd.oasis.opendocument.text': 'odt',
+    'text/csv': 'csv',
+    'text/plain': 'txt',
+    'text/html': 'html',
+    'application/rtf': 'rtf',
+    'application/epub+zip': 'epub',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+    'application/vnd.ms-powerpoint': 'ppt',
+    'application/vnd.oasis.opendocument.presentation': 'odp',
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/gif': 'gif',
+    'image/webp': 'webp',
+};
+
+function normalizeExtension(ext) {
+    const value = String(ext || '').toLowerCase().replace(/^\./, '').trim();
+    if (!value || value === 'bin' || value === 'undefined' || value === 'null') return '';
+    return value === 'jpeg' ? 'jpg' : value;
+}
+
+async function resolveExtension(fileName, mimetype, buffer) {
+    const fromName = normalizeExtension(path.extname(fileName || '').slice(1));
+    if (fromName) return fromName;
+
+    const mime = String(mimetype || '').toLowerCase().split(';')[0].trim();
+    const fromMime = normalizeExtension(MIME_EXT[mime]);
+    if (fromMime) return fromMime;
+
+    try {
+        const FileType = require('file-type');
+        const detected = await FileType.fromBuffer(buffer);
+        if (detected?.ext) return normalizeExtension(detected.ext) || detected.ext;
+    } catch {}
+
+    return 'bin';
+}
+
 /**
  * Get media buffer from message (current message)
  */
@@ -54,10 +99,11 @@ async function getMediaBufferAndExt(message) {
         const stream = await downloadContentFromMessage(m.documentMessage, 'document');
         const chunks = [];
         for await (const chunk of stream) chunks.push(chunk);
+        const buffer = Buffer.concat(chunks);
         const fileName = m.documentMessage.fileName || 'file.bin';
-        const ext = path.extname(fileName).toLowerCase().slice(1) || 'bin';
+        const ext = await resolveExtension(m.documentMessage.fileName, m.documentMessage.mimetype, buffer);
         return { 
-            buffer: Buffer.concat(chunks), 
+            buffer, 
             ext, 
             fileName,
             mimetype: m.documentMessage.mimetype
@@ -73,10 +119,11 @@ async function getMediaBufferAndExt(message) {
             const stream = await downloadContentFromMessage(docMsg, 'document');
             const chunks = [];
             for await (const chunk of stream) chunks.push(chunk);
+            const buffer = Buffer.concat(chunks);
             const fileName = docMsg.fileName || 'file.bin';
-            const ext = path.extname(fileName).toLowerCase().slice(1) || 'bin';
+            const ext = await resolveExtension(docMsg.fileName, docMsg.mimetype, buffer);
             return { 
-                buffer: Buffer.concat(chunks), 
+                buffer, 
                 ext, 
                 fileName,
                 mimetype: docMsg.mimetype
@@ -88,10 +135,12 @@ async function getMediaBufferAndExt(message) {
         const stream = await downloadContentFromMessage(m.imageMessage, 'image');
         const chunks = [];
         for await (const chunk of stream) chunks.push(chunk);
+        const buffer = Buffer.concat(chunks);
+        const ext = await resolveExtension('image', m.imageMessage.mimetype, buffer);
         return { 
-            buffer: Buffer.concat(chunks), 
-            ext: 'jpg', 
-            fileName: 'image.jpg',
+            buffer, 
+            ext: ext === 'bin' ? 'jpg' : ext, 
+            fileName: `image.${ext === 'bin' ? 'jpg' : ext}`,
             mimetype: m.imageMessage.mimetype
         };
     }
