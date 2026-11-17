@@ -5,7 +5,7 @@ const path = require('path');
 async function helpCommand(sock, chatId, message) {
     const helpMessage = `
 ╔═══════════════════╗
-   *🤖 ${settings.botName || 'NightHunter-MD'}*  
+   *🤖 ${settings.botName || 'NightHunter-MD'}*
    Version: *${settings.version || '3.0.0'}*
    by ${settings.botOwner || 'Hoznyx'}
    YT : ${global.ytch}
@@ -15,7 +15,7 @@ async function helpCommand(sock, chatId, message) {
 
 ╔═══════════════════╗
 🌐 *General Commands*:
-║ ➤ .help or .menu
+║ ➤ .help / .menu / .list
 ║ ➤ .ping
 ║ ➤ .alive
 ║ ➤ .tts <text>
@@ -28,21 +28,24 @@ async function helpCommand(sock, chatId, message) {
 ║ ➤ .attp <text>
 ║ ➤ .lyrics <song_title>
 ║ ➤ .8ball <question>
-║ ➤ .groupinfo
-║ ➤ .staff or .admins 
+║ ➤ .groupinfo / .infogp / .infogrupo
+║ ➤ .staff / .admins / .listadmin
 ║ ➤ .take <reply to media/view-once/status>
 ║ ➤ .take vo <nomor/nama grup>
 ║ ➤ .take status <nomor>
-║ ➤ .trt <text> <lang>
-║ ➤ .ss <link>
+║ ➤ .translate / .trt <text> <lang>
+║ ➤ .ss / .ssweb / .screenshot <link>
 ║ ➤ .jid
-║ ➤ .url
+║ ➤ .ppget <reply/@user>
+║ ➤ .topmembers
+║ ➤ .url / .tourl (reply media)
 ║ ➤ .convert <format> (reply to document)
-╚═══════════════════╝ 
+╚═══════════════════╝
 
 ╔═══════════════════╗
 👮‍♂️ *Admin Commands*:
 ║ ➤ .ban @user
+║ ➤ .unban @user
 ║ ➤ .promote @user
 ║ ➤ .demote @user
 ║ ➤ .mute <minutes>
@@ -59,7 +62,7 @@ async function helpCommand(sock, chatId, message) {
 ║ ➤ .tagnotadmin
 ║ ➤ .hidetag <message>
 ║ ➤ .chatbot
-║ ➤ .resetlink
+║ ➤ .resetlink / .revoke / .anularlink
 ║ ➤ .antitag <on/off>
 ║ ➤ .welcome <on/off>
 ║ ➤ .goodbye <on/off>
@@ -72,14 +75,14 @@ async function helpCommand(sock, chatId, message) {
 🔒 *Owner Commands*:
 ║ ➤ .mode <public/private> [local]
 ║ ➤ .mode reset (hapus mode lokal chat ini)
-║ ➤ .clearsession
+║ ➤ .clearsession / .clearsesi
 ║ ➤ .antidelete
 ║ ➤ .cleartmp
 ║ ➤ .update
 ║ ➤ .settings
 ║ ➤ .setpp <reply to image>
 ║ ➤ .clonegb
-║ ➤ .autoreact <on/off>
+║ ➤ .autoreact / .areact / .autoreaction <on/off>
 ║ ➤ .autostatus <on/off>
 ║ ➤ .autostatus react <on/off>
 ║ ➤ .autotyping <on/off>
@@ -98,6 +101,7 @@ async function helpCommand(sock, chatId, message) {
 ║ ➤ .blocklist
 ║ ➤ .unblock <nomor>
 ║ ➤ .sudo add/del/list <@user|nomor>
+║ ➤ .catat masuk/keluar/list/total/export/hapus
 ╚═══════════════════╝
 
 ╔═══════════════════╗
@@ -105,30 +109,35 @@ async function helpCommand(sock, chatId, message) {
 ║ ➤ .blur <image>
 ║ ➤ .simage <reply to sticker>
 ║ ➤ .sticker <reply to image>
-║ ➤ .removebg
-║ ➤ .remini
+║ ➤ .removebg / .rmbg / .nobg
+║ ➤ .remini / .enhance / .upscale
 ║ ➤ .crop <reply to image>
-║ ➤ .tgsticker <Link>
+║ ➤ .tgsticker / .stickertelegram / .telesticker <Link>
 ║ ➤ .meme
-║ ➤ .repack <packname>
-║ ➤ .emojimix <emj1>+<emj2>
+║ ➤ .repack / .steal <packname>
+║ ➤ .emojimix / .emix <emj1>+<emj2>
 ║ ➤ .igs <insta link>
 ║ ➤ .igsc <insta link>
-╚═══════════════════╝  
+╚═══════════════════╝
 
 ╔═══════════════════╗
 🖼️ *Pies Commands*:
 ║ ➤ .pies <country>
-║ ➤ .china 
-║ ➤ .indonesia 
-║ ➤ .japan 
-║ ➤ .korea 
+║ ➤ .china
+║ ➤ .indonesia
+║ ➤ .japan
+║ ➤ .korea
 ║ ➤ .hijab
+║ ➤ .india
+║ ➤ .malaysia
+║ ➤ .thailand
 ╚═══════════════════╝
 
 ╔═══════════════════╗
 🎮 *Game Commands*:
-║ ➤ .tictactoe @user
+║ ➤ .tictactoe / .ttt @user
+║ ➤ .move <1-9>
+║ ➤ .surrender
 ║ ➤ .hangman
 ║ ➤ .guess <letter>
 ║ ➤ .trivia
@@ -142,7 +151,7 @@ async function helpCommand(sock, chatId, message) {
 ║ ➤ .gpt <question>
 ║ ➤ .gemini <question>
 ║ ➤ .jarvis <question>
-║ ➤ .imagine <prompt>
+║ ➤ .imagine / .dalle <prompt>
 ║ ➤ .flux <prompt>
 ║ ➤ .sora <prompt>
 ║ ➤ .ai <on/off/status/clear>
@@ -152,15 +161,15 @@ async function helpCommand(sock, chatId, message) {
 🎯 *Fun Commands*:
 ║ ➤ .compliment @user
 ║ ➤ .insult @user
-║ ➤ .flirt 
-║ ➤ .shayari
-║ ➤ .goodnight
+║ ➤ .flirt
+║ ➤ .shayari / .shayri
+║ ➤ .goodnight / .lovenight / .gn
 ║ ➤ .roseday
 ║ ➤ .character @user
 ║ ➤ .wasted @user
 ║ ➤ .ship @user
 ║ ➤ .simp @user
-║ ➤ .stupid @user [text]
+║ ➤ .stupid / .iss / .itssostupid @user [text]
 ╚═══════════════════╝
 
 ╔═══════════════════╗
@@ -189,10 +198,10 @@ async function helpCommand(sock, chatId, message) {
 📥 *Downloader*:
 ║ ➤ .play <song_name>
 ║ ➤ .music <song_name>
-║ ➤ .song <song_name>
+║ ➤ .song / .mp3 / .ytmp3 <song_name>
 ║ ➤ .spotify <query>
 ║ ➤ .instagram <link>
-║ ➤ .facebook <link>
+║ ➤ .facebook / .fb <link>
 ║ ➤ .tiktok <link>
 ║ ➤ .video <song name>
 ║ ➤ .youtube <Link>
@@ -206,28 +215,33 @@ async function helpCommand(sock, chatId, message) {
 ║ ➤ .lgbt
 ║ ➤ .lolice
 ║ ➤ .its-so-stupid
-║ ➤ .namecard 
+║ ➤ .namecard
 ║ ➤ .oogway
+║ ➤ .oogway2
+║ ➤ .simpcard
+║ ➤ .tonikawa
 ║ ➤ .tweet
-║ ➤ .ytcomment 
-║ ➤ .comrade 
-║ ➤ .gay 
-║ ➤ .glass 
-║ ➤ .jail 
-║ ➤ .passed 
+║ ➤ .ytcomment
+║ ➤ .comrade
+║ ➤ .gay
+║ ➤ .glass
+║ ➤ .jail
+║ ➤ .passed
 ║ ➤ .triggered
 ╚═══════════════════╝
 
 ╔═══════════════════╗
 🖼️ *ANIME*:
-║ ➤ .nom 
-║ ➤ .poke 
-║ ➤ .cry 
-║ ➤ .kiss 
-║ ➤ .pat 
-║ ➤ .hug 
-║ ➤ .wink 
-║ ➤ .facepalm 
+║ ➤ .nom
+║ ➤ .poke
+║ ➤ .cry
+║ ➤ .kiss
+║ ➤ .pat
+║ ➤ .hug
+║ ➤ .wink
+║ ➤ .face-palm / .facepalm
+║ ➤ .animu <query>
+║ ➤ .animuquote
 ╚═══════════════════╝
 
 ╔═══════════════════╗
@@ -237,17 +251,17 @@ async function helpCommand(sock, chatId, message) {
 ║ ➤ .sc
 ║ ➤ .script
 ║ ➤ .repo
-║ ➤ .checkupdate
+║ ➤ .checkupdate / .cekupdate
 ║ ➤ .checkupdate test
 ╚═══════════════════╝
 `;
 
     try {
         const imagePath = path.join(__dirname, '../assets/bot_image.jpg');
-        
+
         if (fs.existsSync(imagePath)) {
             const imageBuffer = fs.readFileSync(imagePath);
-            
+
             await sock.sendMessage(chatId, {
                 image: imageBuffer,
                 caption: helpMessage,
@@ -258,11 +272,11 @@ async function helpCommand(sock, chatId, message) {
             },{ quoted: message });
         } else {
             console.error('Bot image not found at:', imagePath);
-            await sock.sendMessage(chatId, { 
+            await sock.sendMessage(chatId, {
                 text: helpMessage,
                 contextInfo: {
                     forwardingScore: 1,
-                    isForwarded: true 
+                    isForwarded: true
                 }
             });
         }
