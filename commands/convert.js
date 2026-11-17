@@ -110,13 +110,42 @@ function cleanFileName(value) {
     }
 }
 
-function pickFileName(docMsg) {
-    const candidates = [docMsg?.fileName, docMsg?.title];
-    for (const candidate of candidates) {
-        const value = cleanFileName(candidate);
-        if (value) return value;
+function findStringFieldDeep(value, field, depth = 0, seen = new Set()) {
+    if (!value || typeof value !== 'object' || Buffer.isBuffer(value) || depth > 6) return '';
+    if (seen.has(value)) return '';
+    seen.add(value);
+
+    const direct = cleanFileName(value[field]);
+    if (direct) return direct;
+
+    for (const key of Object.keys(value)) {
+        const child = value[key];
+        if (!child || typeof child !== 'object') continue;
+        const found = findStringFieldDeep(child, field, depth + 1, seen);
+        if (found) return found;
     }
     return '';
+}
+
+function isGenericFileName(name) {
+    const base = String(name || '').toLowerCase().replace(/\.[^.]+$/, '');
+    return base === 'file' || base === 'document';
+}
+
+function pickFileName(docMsg, rootMessage) {
+    let fallback = '';
+    for (const candidate of [docMsg?.fileName, docMsg?.title]) {
+        const value = cleanFileName(candidate);
+        if (!value) continue;
+        if (!isGenericFileName(value)) return value;
+        if (!fallback) fallback = value;
+    }
+    const root = rootMessage || docMsg;
+    const deepFileName = findStringFieldDeep(root, 'fileName');
+    if (deepFileName && !isGenericFileName(deepFileName)) return deepFileName;
+    const deepTitle = findStringFieldDeep(root, 'title');
+    if (deepTitle && !isGenericFileName(deepTitle)) return deepTitle;
+    return fallback || deepFileName || deepTitle;
 }
 
 function buildOutputFileName(originalName, extension) {
@@ -131,7 +160,8 @@ function buildOutputFileName(originalName, extension) {
  * Get media buffer from message (current message)
  */
 async function getMediaBufferAndExt(message) {
-    const m = unwrapMessage(message.message || {});
+    const rootMessage = message.message || {};
+    const m = unwrapMessage(rootMessage);
     
     if (m.documentMessage) {
         const docMsg = m.documentMessage;
@@ -139,7 +169,7 @@ async function getMediaBufferAndExt(message) {
         const chunks = [];
         for await (const chunk of stream) chunks.push(chunk);
         const buffer = Buffer.concat(chunks);
-        const fileName = pickFileName(docMsg);
+        const fileName = pickFileName(docMsg, rootMessage);
         const ext = await resolveExtension(fileName, docMsg.mimetype, buffer);
         return { 
             buffer, 
@@ -300,6 +330,7 @@ async function convertCommand(sock, chatId, message, args) {
     
     if (!media) media = await getQuotedMediaBufferAndExt(message);
     console.log('📁 Media from quoted message:', media ? 'Found' : 'Not found');
+    if (media) console.log('[CONVERT] Detected:', { ext: media.ext, fileName: media.fileName, mimetype: media.mimetype });
     
     if (!media) {
         await sock.sendMessage(chatId, {
