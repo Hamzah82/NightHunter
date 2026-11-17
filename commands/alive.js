@@ -16,12 +16,7 @@ async function aliveCommand(sock, chatId, message) {
             text: message1,
             contextInfo: {
                 forwardingScore: 999,
-                isForwarded: true,
-                forwardedNewsletterMessageInfo: {
-                    newsletterJid: '120363161513685998@newsletter',
-                    newsletterName: 'Night Hunter MD',
-                    serverMessageId: -1
-                }
+                isForwarded: true
             }
         }, { quoted: message });
     } catch (error) {

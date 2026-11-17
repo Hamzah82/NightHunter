@@ -34,12 +34,7 @@ async function stickercropCommand(sock, chatId, message) {
             text: 'Please reply to an image/video/sticker with .crop, or send an image/video/sticker with .crop as the caption.',
             contextInfo: {
                 forwardingScore: 999,
-                isForwarded: true,
-                forwardedNewsletterMessageInfo: {
-                    newsletterJid: '120363161513685998@newsletter',
-                    newsletterName: 'Night Hunter MD',
-                    serverMessageId: -1
-                }
+                isForwarded: true
             }
         },{ quoted: messageToQuote });
         return;
@@ -56,12 +51,7 @@ async function stickercropCommand(sock, chatId, message) {
                 text: 'Failed to download media. Please try again.',
                 contextInfo: {
                     forwardingScore: 999,
-                    isForwarded: true,
-                    forwardedNewsletterMessageInfo: {
-                        newsletterJid: '120363161513685998@newsletter',
-                        newsletterName: 'Night Hunter MD',
-                        serverMessageId: -1
-                    }
+                    isForwarded: true
                 }
             });
             return;
@@ -184,12 +174,7 @@ async function stickercropCommand(sock, chatId, message) {
             text: 'Failed to crop sticker! Try with an image.',
             contextInfo: {
                 forwardingScore: 999,
-                isForwarded: true,
-                forwardedNewsletterMessageInfo: {
-                    newsletterJid: '120363161513685998@newsletter',
-                    newsletterName: 'Night Hunter MD',
-                    serverMessageId: -1
-                }
+                isForwarded: true
             }
         });
     }

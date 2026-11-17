@@ -350,12 +350,7 @@ Examples:
 • .convert xlsx`,
             contextInfo: {
                 forwardingScore: 999,
-                isForwarded: true,
-                forwardedNewsletterMessageInfo: {
-                    newsletterJid: '120363161513685998@newsletter',
-                    newsletterName: 'Night Hunter MD',
-                    serverMessageId: -1
-                }
+                isForwarded: true
             }
         }, { quoted: message });
         return;
@@ -368,12 +363,7 @@ Examples:
             text: 'Please specify target format.\nExample: .convert pdf',
             contextInfo: {
                 forwardingScore: 999,
-                isForwarded: true,
-                forwardedNewsletterMessageInfo: {
-                    newsletterJid: '120363161513685998@newsletter',
-                    newsletterName: 'Night Hunter MD',
-                    serverMessageId: -1
-                }
+                isForwarded: true
             }
         }, { quoted: message });
         return;
@@ -384,12 +374,7 @@ Examples:
             text: `Unsupported format: "${targetFormat}"\n\nSupported: pdf, docx, html, txt, xlsx, xls, ods, csv, pptx, png, jpg, gif`,
             contextInfo: {
                 forwardingScore: 999,
-                isForwarded: true,
-                forwardedNewsletterMessageInfo: {
-                    newsletterJid: '120363161513685998@newsletter',
-                    newsletterName: 'Night Hunter MD',
-                    serverMessageId: -1
-                }
+                isForwarded: true
             }
         }, { quoted: message });
         return;
@@ -418,12 +403,7 @@ Examples:
         text: `⏳ Converting ${media.fileName} to ${targetFormat.toUpperCase()}...\n\nPlease wait, this may take a moment.`,
         contextInfo: {
             forwardingScore: 999,
-            isForwarded: true,
-            forwardedNewsletterMessageInfo: {
-                newsletterJid: '120363161513685998@newsletter',
-                newsletterName: 'Night Hunter MD',
-                serverMessageId: -1
-            }
+            isForwarded: true
         }
     }, { quoted: message });
 
@@ -447,12 +427,7 @@ Examples:
             caption: `✅ Converted from ${sourceExt.toUpperCase()} to ${targetFormat.toUpperCase()}\n\nOriginal: ${media.fileName}`,
             contextInfo: {
                 forwardingScore: 999,
-                isForwarded: true,
-                forwardedNewsletterMessageInfo: {
-                    newsletterJid: '120363161513685998@newsletter',
-                    newsletterName: 'Night Hunter MD',
-                    serverMessageId: -1
-                }
+                isForwarded: true
             }
         }, { quoted: message });
 
@@ -470,12 +445,7 @@ Examples:
             text: `❌ Failed to convert document.\n\n${errorMsg}`,
             contextInfo: {
                 forwardingScore: 999,
-                isForwarded: true,
-                forwardedNewsletterMessageInfo: {
-                    newsletterJid: '120363161513685998@newsletter',
-                    newsletterName: 'Night Hunter MD',
-                    serverMessageId: -1
-                }
+                isForwarded: true
             }
         }, { quoted: message });
 

@@ -236,19 +236,13 @@ const convertCommand = require('./commands/convert');
 // Global settings
 global.packname = settings.packname;
 global.author = settings.author;
-global.channelLink = "https://whatsapp.com/channel/0029Va90zAnIHphOuO8Msp3A";
 global.ytch = "Hoznyx";
 
 // Add this near the top of main.js with other global configurations
 const channelInfo = {
     contextInfo: {
         forwardingScore: 1,
-        isForwarded: true,
-        forwardedNewsletterMessageInfo: {
-            newsletterJid: '120363161513685998@newsletter',
-            newsletterName: 'Night Hunter MD',
-            serverMessageId: -1
-        }
+        isForwarded: true
     }
 };
 
@@ -297,19 +291,9 @@ async function handleMessages(sock, messageUpdate, printLog) {
             const buttonId = message.message.buttonsResponseMessage.selectedButtonId;
             const chatId = message.key.remoteJid;
 
-            if (buttonId === 'channel') {
-                await sock.sendMessage(chatId, {
-                    text: '📢 *Join our Channel:*\nhttps://whatsapp.com/channel/0029Va90zAnIHphOuO8Msp3A'
-                }, { quoted: message });
-                return;
-            } else if (buttonId === 'owner') {
+            if (buttonId === 'owner') {
                 const ownerCommand = require('./commands/owner');
                 await ownerCommand(sock, chatId);
-                return;
-            } else if (buttonId === 'support') {
-                await sock.sendMessage(chatId, {
-                    text: `🔗 *Support*\n\nhttps://chat.whatsapp.com/GA4WrOFythU6g3BFVubYM7?mode=wwt`
-                }, { quoted: message });
                 return;
             }
         }
@@ -564,7 +548,7 @@ async function handleMessages(sock, messageUpdate, printLog) {
                 await unbanCommand(sock, chatId, message);
                 break;
             case userMessage === '.help' || userMessage === '.menu' || userMessage === '.bot' || userMessage === '.list':
-                await helpCommand(sock, chatId, message, global.channelLink);
+                await helpCommand(sock, chatId, message);
                 commandExecuted = true;
                 break;
             case userMessage === '.sticker' || userMessage === '.s':

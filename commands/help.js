@@ -235,8 +235,7 @@ async function helpCommand(sock, chatId, message) {
 ║ ➤ .script
 ║ ➤ .repo
 ╚═══════════════════╝
-
-Join our channel for updates:`;
+`;
 
     try {
         const imagePath = path.join(__dirname, '../assets/bot_image.jpg');
@@ -249,12 +248,7 @@ Join our channel for updates:`;
                 caption: helpMessage,
                 contextInfo: {
                     forwardingScore: 1,
-                    isForwarded: true,
-                    forwardedNewsletterMessageInfo: {
-                        newsletterJid: '120363161513685998@newsletter',
-                        newsletterName: 'Night Hunter MD',
-                        serverMessageId: -1
-                    }
+                    isForwarded: true
                 }
             },{ quoted: message });
         } else {
@@ -263,12 +257,7 @@ Join our channel for updates:`;
                 text: helpMessage,
                 contextInfo: {
                     forwardingScore: 1,
-                    isForwarded: true,
-                    forwardedNewsletterMessageInfo: {
-                        newsletterJid: '120363161513685998@newsletter',
-                        newsletterName: 'Night Hunter MD by Hoznyx',
-                        serverMessageId: -1
-                    } 
+                    isForwarded: true 
                 }
             });
         }

@@ -29,12 +29,7 @@ async function autotypingCommand(sock, chatId, message) {
                 text: '❌ This command is only available for the owner!',
                 contextInfo: {
                     forwardingScore: 1,
-                    isForwarded: true,
-                    forwardedNewsletterMessageInfo: {
-                        newsletterJid: '120363161513685998@newsletter',
-                        newsletterName: 'Night Hunter MD',
-                        serverMessageId: -1
-                    }
+                    isForwarded: true
                 }
             });
             return;
@@ -60,12 +55,7 @@ async function autotypingCommand(sock, chatId, message) {
                     text: '❌ Invalid option! Use: .autotyping on/off',
                     contextInfo: {
                         forwardingScore: 1,
-                        isForwarded: true,
-                        forwardedNewsletterMessageInfo: {
-                            newsletterJid: '120363161513685998@newsletter',
-                            newsletterName: 'Night Hunter MD',
-                            serverMessageId: -1
-                        }
+                        isForwarded: true
                     }
                 });
                 return;
@@ -83,12 +73,7 @@ async function autotypingCommand(sock, chatId, message) {
             text: `✅ Auto-typing has been ${config.enabled ? 'enabled' : 'disabled'}!`,
             contextInfo: {
                 forwardingScore: 1,
-                isForwarded: true,
-                forwardedNewsletterMessageInfo: {
-                    newsletterJid: '120363161513685998@newsletter',
-                    newsletterName: 'Night Hunter MD',
-                    serverMessageId: -1
-                }
+                isForwarded: true
             }
         });
         
@@ -98,12 +83,7 @@ async function autotypingCommand(sock, chatId, message) {
             text: '❌ Error processing command!',
             contextInfo: {
                 forwardingScore: 1,
-                isForwarded: true,
-                forwardedNewsletterMessageInfo: {
-                    newsletterJid: '120363161513685998@newsletter',
-                    newsletterName: 'Night Hunter MD',
-                    serverMessageId: -1
-                }
+                isForwarded: true
             }
         });
     }
