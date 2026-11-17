@@ -88,47 +88,65 @@ async function resolveExtension(fileName, mimetype, buffer) {
     return 'bin';
 }
 
+const WRAPPER_KEYS = ['documentWithCaptionMessage', 'viewOnceMessage', 'viewOnceMessageV2', 'viewOnceMessageV2Extension', 'ephemeralMessage', 'editedMessage'];
+
+function unwrapMessage(message) {
+    let current = message || {};
+    for (let i = 0; i < 6; i++) {
+        const key = WRAPPER_KEYS.find(k => current?.[k]?.message);
+        if (!key) break;
+        current = current[key].message;
+    }
+    return current || {};
+}
+
+function cleanFileName(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    try {
+        return decodeURIComponent(raw);
+    } catch {
+        return raw;
+    }
+}
+
+function pickFileName(docMsg) {
+    const candidates = [docMsg?.fileName, docMsg?.title];
+    for (const candidate of candidates) {
+        const value = cleanFileName(candidate);
+        if (value) return value;
+    }
+    return '';
+}
+
+function buildOutputFileName(originalName, extension) {
+    const normalized = String(originalName || '').trim().replace(/\\/g, '/');
+    const name = path.basename(normalized) || 'file';
+    const currentExt = path.extname(name);
+    const base = currentExt ? name.slice(0, -currentExt.length) : name;
+    return `${base || 'file'}.${extension}`;
+}
+
 /**
  * Get media buffer from message (current message)
  */
 async function getMediaBufferAndExt(message) {
-    const m = message.message || {};
+    const m = unwrapMessage(message.message || {});
     
-    // Check documentMessage
     if (m.documentMessage) {
-        const stream = await downloadContentFromMessage(m.documentMessage, 'document');
+        const docMsg = m.documentMessage;
+        const stream = await downloadContentFromMessage(docMsg, 'document');
         const chunks = [];
         for await (const chunk of stream) chunks.push(chunk);
         const buffer = Buffer.concat(chunks);
-        const fileName = m.documentMessage.fileName || 'file.bin';
-        const ext = await resolveExtension(m.documentMessage.fileName, m.documentMessage.mimetype, buffer);
+        const fileName = pickFileName(docMsg);
+        const ext = await resolveExtension(fileName, docMsg.mimetype, buffer);
         return { 
             buffer, 
             ext, 
-            fileName,
-            mimetype: m.documentMessage.mimetype
+            fileName: fileName || `file.${ext}`,
+            mimetype: docMsg.mimetype
         };
-    }
-    
-    // Check documentWithCaptionMessage (new WhatsApp format)
-    if (m.documentWithCaptionMessage) {
-        // documentWithCaptionMessage contains message property with the actual document
-        const innerMsg = m.documentWithCaptionMessage.message;
-        if (innerMsg?.documentMessage) {
-            const docMsg = innerMsg.documentMessage;
-            const stream = await downloadContentFromMessage(docMsg, 'document');
-            const chunks = [];
-            for await (const chunk of stream) chunks.push(chunk);
-            const buffer = Buffer.concat(chunks);
-            const fileName = docMsg.fileName || 'file.bin';
-            const ext = await resolveExtension(docMsg.fileName, docMsg.mimetype, buffer);
-            return { 
-                buffer, 
-                ext, 
-                fileName,
-                mimetype: docMsg.mimetype
-            };
-        }
     }
     
     if (m.imageMessage) {
@@ -176,7 +194,14 @@ async function getMediaBufferAndExt(message) {
  * Get media buffer from quoted message
  */
 async function getQuotedMediaBufferAndExt(message) {
-    const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage || null;
+    const content = unwrapMessage(message.message || {});
+    const contextInfo = content.extendedTextMessage?.contextInfo
+        || content.documentMessage?.contextInfo
+        || content.imageMessage?.contextInfo
+        || content.videoMessage?.contextInfo
+        || content.audioMessage?.contextInfo
+        || content.stickerMessage?.contextInfo;
+    const quoted = contextInfo?.quotedMessage || null;
     if (!quoted) return null;
     return getMediaBufferAndExt({ message: quoted });
 }
@@ -381,7 +406,7 @@ Examples:
         );
 
         // Generate output filename
-        const outputFileName = path.basename(media.fileName, path.extname(media.fileName)) + '.' + targetFormat;
+        const outputFileName = buildOutputFileName(media.fileName, targetFormat);
 
         // Send the converted file
         await sock.sendMessage(chatId, {
