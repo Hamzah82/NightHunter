@@ -81,11 +81,15 @@ TELEGRAM_BOT_TOKEN=
 OPENWEATHER_API_KEY=
 NEWSAPI_KEY=
 MEMORY_LIMIT_MB=450
+UPDATE_NOTIFY_JID=
+GITHUB_TOKEN=
 ```
 
 - `TELEGRAM_BOT_TOKEN` wajib untuk fitur `.tgsticker`. Buat bot baru via @BotFather jika token lama pernah bocor.
 - Tanpa `OPENWEATHER_API_KEY`, `.weather` memakai Open-Meteo/wttr.in (tanpa API key).
 - Tanpa `NEWSAPI_KEY`, `.news` memakai Google News RSS (tanpa API key).
+- `UPDATE_NOTIFY_JID` opsional; default notifikasi update dikirim ke `OWNER_NUMBER` dan chat bot sendiri.
+- `GITHUB_TOKEN` opsional; hanya perlu untuk repo private atau jika kena rate limit GitHub API.
 - `MEMORY_LIMIT_MB` mengaktifkan auto-restart saat pemakaian RAM melewati batas (biarkan kosong untuk menonaktifkan).
 
 ### Catatan Dependensi

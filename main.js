@@ -95,78 +95,220 @@ const { handleChatbotCommand, handleChatbotResponse } = require('./commands/chat
 const { csbotCommand, handleCsAutoReply, recordOwnerMessage } = require('./commands/csbot');
 const { exec } = require('child_process');
 const util = require('util');
+const axios = require('axios');
+const { readJson, writeJson } = require('./lib/safeJson');
 const execAsync = util.promisify(exec);
 
 // ========== AUTO UPDATE CHECKER ==========
 
 let updateCheckInterval = null;
-let lastCheckedRev = '';
-let ownerNotifiedJid = '';
 
-/**
- * Mulai auto-check update setiap 10 detik.
- * Kalau ada commit baru di GitHub, kirim notifikasi ke owner.
- * Dipanggil dari index.js setelah koneksi terbuka.
- */
-function startAutoUpdateChecker(sock) {
-    // Hentikan interval lama kalau ada
-    if (updateCheckInterval) {
-        clearInterval(updateCheckInterval);
+const UPDATE_STATE_PATH = path.join(__dirname, 'data', 'updateState.json');
+const GITHUB_API = 'https://api.github.com';
+
+function readUpdateState() {
+    const data = readJson(UPDATE_STATE_PATH, {});
+    return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+}
+
+function saveUpdateState(patch) {
+    return writeJson(UPDATE_STATE_PATH, { ...readUpdateState(), ...patch });
+}
+
+function toWhatsAppJid(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+
+    if (raw.includes('@')) {
+        const [userPart, domain = 's.whatsapp.net'] = raw.split('@');
+        const number = userPart.split(':')[0].replace(/\D/g, '');
+        return number ? `${number}@${domain}` : null;
     }
 
-    const settings = require('./settings');
-    ownerNotifiedJid = settings.ownerNumber + '@s.whatsapp.net';
+    const number = raw.split(':')[0].replace(/\D/g, '');
+    return number ? `${number}@s.whatsapp.net` : null;
+}
 
-    if (!fs.existsSync(path.join(process.cwd(), '.git'))) {
-        console.log('📡 Auto-update checker skipped (not a git repository)');
+function getUpdateNotificationJids(sock) {
+    const jids = new Set();
+
+    const ownerJid = toWhatsAppJid(process.env.UPDATE_NOTIFY_JID) || toWhatsAppJid(settings.ownerNumber);
+    if (ownerJid) jids.add(ownerJid);
+
+    const selfJid = toWhatsAppJid(sock?.user?.id);
+    if (selfJid) jids.add(selfJid);
+
+    return [...jids];
+}
+
+function parseGitHubRepo(value) {
+    const match = String(value || '').match(/github\.com[:\/]([^\/\s]+)\/([^\/\s]+?)(?:\.git|\/|$)/i);
+    return match ? `${match[1]}/${match[2]}` : null;
+}
+
+async function resolveRepoSlug() {
+    try {
+        const remote = (await execAsync('git remote get-url origin', { timeout: 5000 })).stdout?.trim() || '';
+        const slug = parseGitHubRepo(remote);
+        if (slug) return slug;
+    } catch {}
+
+    return parseGitHubRepo(settings.updateZipUrl) || parseGitHubRepo(process.env.UPDATE_ZIP_URL) || 'Hamzah82/NightHunter';
+}
+
+async function fetchLatestGitHubCommit(slug) {
+    const headers = {
+        'User-Agent': 'NightHunter-Updater',
+        Accept: 'application/vnd.github+json'
+    };
+    if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+
+    const { data } = await axios.get(`${GITHUB_API}/repos/${slug}/commits/main`, {
+        timeout: 15000,
+        headers
+    });
+    if (!data?.sha) throw new Error('GitHub API returned no commit');
+    return data;
+}
+
+async function fetchRemoteUpdate(slug) {
+    const gitDir = path.join(process.cwd(), '.git');
+
+    if (fs.existsSync(gitDir)) {
+        try {
+            await execAsync('git fetch origin main', { timeout: 15000 });
+            const sha = (await execAsync('git rev-parse origin/main', { timeout: 10000 })).stdout?.trim() || '';
+            if (sha) return { sha, source: 'git', slug };
+        } catch (error) {
+            console.warn(
+                'Auto-update: git fetch failed, falling back to GitHub API:',
+                String(error.message || error).split('\n')[0]
+            );
+        }
+    }
+
+    const commit = await fetchLatestGitHubCommit(slug);
+    return { sha: commit.sha, source: 'github', slug, commit };
+}
+
+async function buildCommitSummary(remote, baseline) {
+    const shaPattern = /^[0-9a-f]{7,40}$/i;
+    if (remote.source === 'git' && shaPattern.test(baseline) && shaPattern.test(remote.sha)) {
+        try {
+            const summary = (await execAsync(
+                `git log --pretty=format:"• %h %s" ${baseline}..${remote.sha}`,
+                { timeout: 10000 }
+            )).stdout?.trim();
+            if (summary) return summary;
+        } catch {}
+    }
+
+    if (remote.commit) {
+        const shortSha = String(remote.commit.sha || '').slice(0, 7);
+        const message = String(remote.commit.commit?.message || '').split('\n')[0].trim() || '(tanpa pesan)';
+        const link = remote.commit.html_url || '';
+        return `• ${shortSha} ${message}${link ? `\n${link}` : ''}`;
+    }
+
+    return `• ${String(remote.sha || '').slice(0, 7)}`;
+}
+
+async function sendUpdateNotification(sock, text) {
+    const targets = getUpdateNotificationJids(sock);
+    if (!targets.length) throw new Error('No update notification target (set OWNER_NUMBER)');
+
+    let sent = 0;
+    const failures = [];
+
+    for (const jid of targets) {
+        try {
+            await sock.sendMessage(jid, { text });
+            sent++;
+            console.log(`📬 Auto-update notification sent to ${jid}`);
+        } catch (error) {
+            failures.push(`${jid}: ${error.message}`);
+        }
+    }
+
+    if (!sent) throw new Error(failures.join('; ') || 'Failed to send update notification');
+    return sent;
+}
+
+async function runUpdateCheck(sock) {
+    const repoSlug = await resolveRepoSlug();
+    const remote = await fetchRemoteUpdate(repoSlug);
+    const state = readUpdateState();
+
+    let localRev = '';
+    try {
+        if (fs.existsSync(path.join(process.cwd(), '.git'))) {
+            localRev = (await execAsync('git rev-parse HEAD', { timeout: 10000 })).stdout?.trim() || '';
+        }
+    } catch {}
+
+    // Sudah pernah dilihat/dipakai: jangan kirim notifikasi berulang.
+    if (remote.sha === localRev || remote.sha === state.lastSeenCommit) {
+        if (state.lastSeenCommit !== remote.sha) {
+            saveUpdateState({ lastSeenCommit: remote.sha, repo: repoSlug });
+        }
         return;
     }
 
-    // Catat rev saat ini
-    execAsync('git rev-parse HEAD', { timeout: 10000 })
-        .then(r => { lastCheckedRev = r.stdout?.trim() || ''; })
-        .catch(() => {});
+    const baseline = state.lastSeenCommit || localRev || '';
+    if (!baseline) {
+        // Tanpa git dan belum punya state: catat commit terbaru sebagai baseline.
+        saveUpdateState({ lastSeenCommit: remote.sha, repo: repoSlug });
+        console.log('📡 Auto-update baseline recorded');
+        return;
+    }
 
-    // Cek setiap 5 menit
-    updateCheckInterval = setInterval(async () => {
+    const summary = await buildCommitSummary(remote, baseline);
+    await sendUpdateNotification(sock,
+        `🔔 *Update Tersedia!*\n\n` +
+        `Ada commit baru di *${repoSlug}*.\n\n` +
+        `${summary}\n\n` +
+        `Ketik *.update* untuk menarik versi terbaru.`
+    );
+
+    // Simpan hanya setelah notifikasi berhasil, supaya kegagalan kirim dicoba lagi.
+    saveUpdateState({
+        lastSeenCommit: remote.sha,
+        repo: repoSlug,
+        notifiedAt: new Date().toISOString()
+    });
+}
+
+/**
+ * Mulai auto-check update. Cek langsung saat start, lalu tiap 2 menit.
+ * Git dipakai jika tersedia; kalau fetch gagal, fallback ke GitHub API
+ * sehingga tetap jalan di panel tanpa akses Git/SSH.
+ * Dipanggil dari index.js setelah koneksi terbuka.
+ */
+function startAutoUpdateChecker(sock) {
+    if (updateCheckInterval) {
+        clearInterval(updateCheckInterval);
+        updateCheckInterval = null;
+    }
+
+    let checking = false;
+    const check = async () => {
+        if (checking) return;
+        checking = true;
         try {
-            // Fetch tanpa merge
-            await execAsync('git fetch origin main', { timeout: 15000 });
-
-            // Dapatkan rev terbaru di origin
-            const remoteRev = (await execAsync('git rev-parse origin/main', { timeout: 10000 })).stdout?.trim() || '';
-
-            if (!remoteRev || remoteRev === lastCheckedRev) return; // Tidak ada perubahan
-
-            // Ada update! Dapatkan info commit
-            const commits = (await execAsync(
-                `git log --pretty=format:"• %h %s" ${lastCheckedRev}..${remoteRev} 2>/dev/null || echo "(unknown)"`,
-                { timeout: 10000 }
-            )).stdout?.trim() || '(unknown)';
-
-            lastCheckedRev = remoteRev;
-
-            // Kirim notifikasi ke owner
-            try {
-                await sock.sendMessage(ownerNotifiedJid, {
-                    text: `🔔 *Update Tersedia!*\n\n` +
-                          `Ada commit baru di GitHub.\n\n` +
-                          `${commits}\n\n` +
-                          `Ketik *.update* atau *.ai update* untuk menarik versi terbaru.`
-                });
-                console.log('📬 Auto-update notification sent to owner');
-            } catch (e) {
-                console.error('❌ Failed to send update notification:', e.message);
+            await runUpdateCheck(sock);
+        } catch (error) {
+            const message = String(error?.message || error);
+            if (!/fetch|network|timeout|ENOTFOUND|ECONN/i.test(message)) {
+                console.error('❌ Auto-update check error:', message.split('\n')[0]);
             }
-        } catch (err) {
-            // Silent — jangan spam error kalau network bermasalah
-            if (err.message && !err.message.includes('fetch')) {
-                console.error('❌ Auto-update check error:', err.message);
-            }
+        } finally {
+            checking = false;
         }
-    }, 5 * 60 * 1000); // 5 menit
+    };
 
-    console.log('📡 Auto-update checker started (every 5 minutes)');
+    check();
+    updateCheckInterval = setInterval(check, 2 * 60 * 1000);
+    console.log('📡 Auto-update checker started (every 2 minutes)');
 }
 
 /**
