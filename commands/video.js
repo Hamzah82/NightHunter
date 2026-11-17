@@ -1,6 +1,6 @@
 const yts = require('yt-search');
 
-const { fetchYouTubeVideo } = require('../lib/mediaDownloader');
+const { downloadYouTubeVideo } = require('../lib/mediaDownloader');
 
 async function videoCommand(sock, chatId, message) {
     try {
@@ -52,14 +52,14 @@ async function videoCommand(sock, chatId, message) {
             return;
         }
 
-        const videoData = await fetchYouTubeVideo(videoUrl);
-        if (!videoData?.url) {
+        const videoData = await downloadYouTubeVideo(videoUrl);
+        if (!videoData?.buffer) {
             throw new Error('All download sources failed. The content may be unavailable or blocked in your region.');
         }
 
-        // Send video directly using the download URL
+        // Send the downloaded buffer so WhatsApp does not fetch an IP-bound googlevideo URL
         await sock.sendMessage(chatId, {
-            video: { url: videoData.url },
+            video: videoData.buffer,
             mimetype: 'video/mp4',
             fileName: `${(videoData.title || videoTitle || 'video').replace(/[^\w\s-]/g, '')}.mp4`,
             caption: `*${videoData.title || videoTitle || 'Video'}*\n\n> *_Downloaded by Night Hunter MD_*`
