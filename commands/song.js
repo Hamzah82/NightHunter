@@ -8,16 +8,18 @@ const { fetchYouTubeAudio, downloadMedia } = require('../lib/mediaDownloader');
 async function songCommand(sock, chatId, message) {
     try {
         const text = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
-        if (!text) {
+        const used = text.split(/\s+/)[0] || '.song';
+        const query = text.slice(used.length).trim();
+        if (!query) {
             await sock.sendMessage(chatId, { text: 'Usage: .song <song name or YouTube link>' }, { quoted: message });
             return;
         }
 
         let video;
-        if (text.includes('youtube.com') || text.includes('youtu.be')) {
-			video = { url: text };
+        if (query.includes('youtube.com') || query.includes('youtu.be')) {
+			video = { url: query };
         } else {
-			const search = await yts(text);
+			const search = await yts(query);
 			if (!search || !search.videos.length) {
                 await sock.sendMessage(chatId, { text: 'No results found.' }, { quoted: message });
                 return;

@@ -61,6 +61,30 @@ Edit `jarvis.json` untuk mengaktifkan `.jarvis` dan CS AI auto-reply:
 
 CS AI juga bisa dikustom lewat `SYSPROMPT.md`.
 
+### Konfigurasi Environment (Opsional)
+
+Buat file `.env` di root project. Semua nilai bersifat opsional:
+
+```env
+OWNER_NUMBER=628xxxxxxxxxx
+GIPHY_API_KEY=
+TELEGRAM_BOT_TOKEN=
+OPENWEATHER_API_KEY=
+NEWSAPI_KEY=
+MEMORY_LIMIT_MB=450
+```
+
+- `TELEGRAM_BOT_TOKEN` wajib untuk fitur `.tgsticker`. Buat bot baru via @BotFather jika token lama pernah bocor.
+- Tanpa `OPENWEATHER_API_KEY`, `.weather` memakai Open-Meteo/wttr.in (tanpa API key).
+- Tanpa `NEWSAPI_KEY`, `.news` memakai Google News RSS (tanpa API key).
+- `MEMORY_LIMIT_MB` mengaktifkan auto-restart saat pemakaian RAM melewati batas (biarkan kosong untuk menonaktifkan).
+
+### Catatan Dependensi
+
+- Konversi dokumen (`.convert`), YouTube (`.song`/`.video`), dan TikTok berjalan penuh dengan library npm — tanpa binary eksternal.
+- `ffmpeg` sistem hanya dibutuhkan untuk stiker video/GIF animasi (`.sticker` pada video), `.attp`, `.crop`, dan fitur multimedia lama. Stiker dari gambar/GIF statis diproses dengan `sharp`.
+- Jalankan `npm test` untuk memeriksa sintaks seluruh file JavaScript.
+
 ## Struktur Direktori
 
 ```

@@ -35,12 +35,6 @@ setInterval(() => {
 const settings = require('./settings');
 require('./config.js');
 const { isBanned } = require('./lib/isBanned');
-const yts = require('yt-search');
-const { fetchBuffer } = require('./lib/myfunc');
-const fetch = require('node-fetch');
-const ytdl = require('ytdl-core');
-const axios = require('axios');
-const ffmpeg = require('fluent-ffmpeg');
 const { isSudo } = require('./lib/index');
 const isOwnerOrSudo = require('./lib/isOwner');
 const { autotypingCommand, isAutotypingEnabled, handleAutotypingForMessage, handleAutotypingForCommand, showTypingAfterCommand } = require('./commands/autotyping');
@@ -122,6 +116,11 @@ function startAutoUpdateChecker(sock) {
     const settings = require('./settings');
     ownerNotifiedJid = settings.ownerNumber + '@s.whatsapp.net';
 
+    if (!fs.existsSync(path.join(process.cwd(), '.git'))) {
+        console.log('📡 Auto-update checker skipped (not a git repository)');
+        return;
+    }
+
     // Catat rev saat ini
     execAsync('git rev-parse HEAD', { timeout: 10000 })
         .then(r => { lastCheckedRev = r.stdout?.trim() || ''; })
@@ -164,9 +163,9 @@ function startAutoUpdateChecker(sock) {
                 console.error('❌ Auto-update check error:', err.message);
             }
         }
-    }, 10 * 1000); // 10 detik
+    }, 5 * 60 * 1000); // 5 menit
 
-    console.log('📡 Auto-update checker started (every 10 seconds)');
+    console.log('📡 Auto-update checker started (every 5 minutes)');
 }
 
 /**
@@ -228,7 +227,6 @@ const { miscCommand, handleHeart } = require('./commands/misc');
 const { animeCommand } = require('./commands/anime');
 const { piesCommand, piesAlias } = require('./commands/pies');
 const stickercropCommand = require('./commands/stickercrop');
-const updateCommand = require('./commands/update');
 const removebgCommand = require('./commands/removebg');
 const { reminiCommand } = require('./commands/remini');
 const convertCommand = require('./commands/convert');
@@ -344,7 +342,8 @@ async function handleMessages(sock, messageUpdate, printLog) {
         }
 
         // Check if user is banned (skip ban check for unban command)
-        if (isBanned(senderId) && !userMessage.startsWith('.unban')) {
+        const senderIds = [message.key.participant, message.key.participantAlt, chatId, message.key.remoteJidAlt].filter(Boolean);
+        if (isBanned(senderIds) && !userMessage.startsWith('.unban')) {
             // Only respond occasionally to avoid spam
             if (Math.random() < 0.1) {
                 await sock.sendMessage(chatId, {
@@ -452,7 +451,7 @@ async function handleMessages(sock, messageUpdate, printLog) {
         const isAdminCommand = adminCommands.some(cmd => userMessage.startsWith(cmd));
 
         // List of owner commands
-        const ownerCommands = ['.mode', '.autostatus', '.antidelete', '.cleartmp', '.setpp', '.clearsession', '.areact', '.autoreact', '.autotyping', '.autoread', '.pmblocker', '.clonegb', '.save', '.get', '.notes', '.blocklist', '.unblock', '.take', '.ai'];
+        const ownerCommands = ['.mode', '.autostatus', '.antidelete', '.cleartmp', '.setpp', '.clearsession', '.areact', '.autoreact', '.autotyping', '.autoread', '.pmblocker', '.clonegb', '.save', '.get', '.notes', '.blocklist', '.unblock', '.take', '.ai', '.update', '.settings'];
         const isOwnerCommand = ownerCommands.some(cmd => userMessage.startsWith(cmd));
 
         let isSenderAdmin = false;
@@ -557,7 +556,7 @@ async function handleMessages(sock, messageUpdate, printLog) {
                 break;
             case userMessage.startsWith('.warnings'):
                 const mentionedJidListWarnings = message.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
-                await warningsCommand(sock, chatId, mentionedJidListWarnings);
+                await warningsCommand(sock, chatId, mentionedJidListWarnings, message);
                 break;
             case userMessage.startsWith('.warn'):
                 const mentionedJidListWarn = message.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
@@ -720,7 +719,7 @@ async function handleMessages(sock, messageUpdate, printLog) {
                 await quoteCommand(sock, chatId, message);
                 break;
             case userMessage === '.fact':
-                await factCommand(sock, chatId, message, message);
+                await factCommand(sock, chatId, message);
                 break;
             case userMessage.startsWith('.weather'):
                 const city = userMessage.slice(9).trim();
@@ -742,7 +741,7 @@ async function handleMessages(sock, messageUpdate, printLog) {
                 if (isNaN(position)) {
                     await sock.sendMessage(chatId, { text: 'Please provide a valid position number for Tic-Tac-Toe move.', ...channelInfo }, { quoted: message });
                 } else {
-                    tictactoeMove(sock, chatId, senderId, position);
+                    await handleTicTacToeMove(sock, chatId, senderId, String(position));
                 }
                 break;
             case userMessage === '.topmembers':
@@ -821,13 +820,13 @@ async function handleMessages(sock, messageUpdate, printLog) {
             case userMessage.startsWith('.mention '):
                 {
                     const args = userMessage.split(' ').slice(1).join(' ');
-                    const isOwner = message.key.fromMe || senderIsSudo;
+                    const isOwner = message.key.fromMe || senderIsOwnerOrSudo;
                     await mentionToggleCommand(sock, chatId, message, args, isOwner);
                 }
                 break;
             case userMessage === '.setmention':
                 {
-                    const isOwner = message.key.fromMe || senderIsSudo;
+                    const isOwner = message.key.fromMe || senderIsOwnerOrSudo;
                     await setMentionCommand(sock, chatId, message, isOwner);
                 }
                 break;
@@ -1000,9 +999,6 @@ async function handleMessages(sock, messageUpdate, printLog) {
             case userMessage.startsWith('.autostatus'):
                 const autoStatusArgs = userMessage.split(' ').slice(1);
                 await autoStatusCommand(sock, chatId, message, autoStatusArgs);
-                break;
-            case userMessage.startsWith('.simp'):
-                await simpCommand(sock, chatId, message);
                 break;
             case userMessage.startsWith('.metallic'):
                 await textmakerCommand(sock, chatId, message, userMessage, 'metallic');

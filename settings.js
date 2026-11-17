@@ -1,12 +1,15 @@
+require('dotenv').config();
+
 const settings = {
   packname: 'Night Hunter',
-  author: '‎',
+  author: '',
   botName: "Night Hunter",
   botOwner: 'Hoznyx', // Your name
-  ownerNumber: '6282329776262', //Set your number here without + symbol, just add country code & number without any space
-  giphyApiKey: 'qnl7ssQChTdPjsKta2Ax2LMaGXz303tq',
+  ownerNumber: process.env.OWNER_NUMBER || '6282329776262', // Without +, spaces, or symbols
+  giphyApiKey: process.env.GIPHY_API_KEY || '',
+  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
   commandMode: "public",
-  maxStoreMessages: 20, 
+  maxStoreMessages: 20,
   storeWriteInterval: 10000,
   description: "This is a bot for managing group commands and automating tasks.",
   version: "3.0.7",

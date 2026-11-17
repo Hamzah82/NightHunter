@@ -55,11 +55,15 @@ setInterval(() => store.writeToFile(), settings.storeWriteInterval || 10000)
 
 // Memory optimization - Force garbage collection if available
 setInterval(() => {
-    if (global.gc) {
-        global.gc()
-        console.log('🧹 Garbage collection completed')
+    if (global.gc) global.gc()
+
+    const limitMb = parseInt(process.env.MEMORY_LIMIT_MB || '0', 10)
+    if (limitMb > 0 && process.memoryUsage().rss > limitMb * 1024 * 1024) {
+        console.error(`Memory limit exceeded (${limitMb} MB). Restarting process...`)
+        try { store.writeToFile() } catch {}
+        process.exit(1)
     }
-}, 60_000) // every 1 minute
+}, 60_000)
 
 let phoneNumber = "911234567890"
 let owner = JSON.parse(fs.readFileSync('./data/owner.json'))
@@ -364,18 +368,12 @@ async function startXeonBotInc() {
         await handleGroupParticipantUpdate(XeonBotInc, update);
     });
 
-    XeonBotInc.ev.on('messages.upsert', async (m) => {
-        if (m.messages[0].key && m.messages[0].key.remoteJid === 'status@broadcast') {
-            await handleStatus(XeonBotInc, m);
-        }
-    });
-
     XeonBotInc.ev.on('status.update', async (status) => {
-        await handleStatus(XeonBotInc, status);
+        try { await handleStatus(XeonBotInc, status); } catch (error) { console.error('status.update handler error:', error.message); }
     });
 
     XeonBotInc.ev.on('messages.reaction', async (status) => {
-        await handleStatus(XeonBotInc, status);
+        try { await handleStatus(XeonBotInc, status); } catch (error) { console.error('messages.reaction handler error:', error.message); }
     });
 
     return XeonBotInc
@@ -400,10 +398,11 @@ process.on('unhandledRejection', (err) => {
     console.error('Unhandled Rejection:', err)
 })
 
-let file = require.resolve(__filename)
-fs.watchFile(file, () => {
-    fs.unwatchFile(file)
-    console.log(chalk.redBright(`Update ${__filename}`))
-    delete require.cache[file]
-    require(file)
-})
+function gracefulShutdown(signal) {
+    console.log(`Received ${signal}, saving store and exiting...`)
+    try { store.writeToFile() } catch {}
+    process.exit(0)
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
+process.on('SIGINT', () => gracefulShutdown('SIGINT'))

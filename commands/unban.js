@@ -1,8 +1,8 @@
-const fs = require('fs');
-const path = require('path');
 const { channelInfo } = require('../lib/messageConfig');
 const isAdmin = require('../lib/isAdmin');
 const { isSudo } = require('../lib/index');
+const { readJson, writeJson } = require('../lib/safeJson');
+const { normalizeUserId } = require('../lib/isBanned');
 
 async function unbanCommand(sock, chatId, message) {
     // Restrict in groups to admins; in private to owner/sudo
@@ -46,11 +46,13 @@ async function unbanCommand(sock, chatId, message) {
     }
 
     try {
-        const bannedUsers = JSON.parse(fs.readFileSync('./data/banned.json'));
-        const index = bannedUsers.indexOf(userToUnban);
-        if (index > -1) {
-            bannedUsers.splice(index, 1);
-            fs.writeFileSync('./data/banned.json', JSON.stringify(bannedUsers, null, 2));
+        const bannedUsers = readJson('./data/banned.json', []);
+        const target = normalizeUserId(userToUnban);
+        const remaining = Array.isArray(bannedUsers)
+            ? bannedUsers.filter(entry => normalizeUserId(entry) !== target)
+            : [];
+        if (Array.isArray(bannedUsers) && remaining.length !== bannedUsers.length) {
+            writeJson('./data/banned.json', remaining);
             
             await sock.sendMessage(chatId, { 
                 text: `Successfully unbanned ${userToUnban.split('@')[0]}!`,

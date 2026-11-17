@@ -96,6 +96,7 @@ async function helpCommand(sock, chatId, message) {
 ║ ➤ .anticall <on/off/status>
 ║ ➤ .blocklist
 ║ ➤ .unblock <nomor>
+║ ➤ .sudo add/del/list <@user|nomor>
 ╚═══════════════════╝
 
 ╔═══════════════════╗
@@ -186,6 +187,7 @@ async function helpCommand(sock, chatId, message) {
 ╔═══════════════════╗
 📥 *Downloader*:
 ║ ➤ .play <song_name>
+║ ➤ .music <song_name>
 ║ ➤ .song <song_name>
 ║ ➤ .spotify <query>
 ║ ➤ .instagram <link>
