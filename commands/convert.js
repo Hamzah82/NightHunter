@@ -12,9 +12,89 @@
 
 const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
 const axios = require('axios');
 const FormData = require('form-data');
+
+const execFileAsync = promisify(execFile);
+const IMAGE_FORMATS = ['png', 'jpg', 'gif', 'webp'];
+
+let cachedSoffice;
+async function findSoffice() {
+    if (cachedSoffice !== undefined) return cachedSoffice;
+    for (const bin of ['soffice', 'libreoffice']) {
+        try {
+            const { stdout } = await execFileAsync('which', [bin]);
+            if (stdout.trim()) {
+                cachedSoffice = stdout.trim();
+                return cachedSoffice;
+            }
+        } catch {}
+    }
+    cachedSoffice = null;
+    return cachedSoffice;
+}
+
+async function convertImageLocally(buffer, outputFormat) {
+    if (!IMAGE_FORMATS.includes(outputFormat)) return null;
+    try {
+        const sharp = require('sharp');
+        const image = sharp(buffer, { animated: outputFormat === 'gif', failOn: 'none' });
+        if (outputFormat === 'png') return await image.png().toBuffer();
+        if (outputFormat === 'jpg') return await image.jpeg({ quality: 92 }).toBuffer();
+        if (outputFormat === 'gif') return await image.gif().toBuffer();
+        if (outputFormat === 'webp') return await image.webp().toBuffer();
+    } catch (e) {
+        return null;
+    }
+    return null;
+}
+
+async function convertWithLibreOffice(buffer, inputExt, outputFormat) {
+    if (IMAGE_FORMATS.includes(outputFormat)) return null;
+    const soffice = await findSoffice();
+    if (!soffice) return null;
+
+    const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'nh-convert-'));
+    try {
+        const safeExt = (inputExt || 'bin').replace(/[^a-z0-9]/gi, '').toLowerCase() || 'bin';
+        const inputPath = path.join(tmpDir, `input.${safeExt}`);
+        await fs.promises.writeFile(inputPath, buffer);
+
+        const profileUrl = 'file://' + path.join(tmpDir, 'profile');
+        await execFileAsync(soffice, [
+            '--headless',
+            '--norestore',
+            '--nolockcheck',
+            '--nodefault',
+            '--nofirststartwizard',
+            `-env:UserInstallation=${profileUrl}`,
+            '--convert-to',
+            outputFormat,
+            '--outdir',
+            tmpDir,
+            inputPath
+        ], { timeout: 180000, maxBuffer: 16 * 1024 * 1024 });
+
+        let outPath = path.join(tmpDir, `input.${outputFormat}`);
+        if (!fs.existsSync(outPath)) {
+            const files = await fs.promises.readdir(tmpDir);
+            const match = files.find(f => f.toLowerCase().endsWith(`.${outputFormat}`));
+            if (!match) return null;
+            outPath = path.join(tmpDir, match);
+        }
+
+        const out = await fs.promises.readFile(outPath);
+        return out.length ? out : null;
+    } catch (e) {
+        return null;
+    } finally {
+        fs.promises.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+    }
+}
 
 // MIME types for output formats
 const FORMAT_MIME = {
@@ -134,6 +214,12 @@ async function getQuotedMediaBufferAndExt(message) {
  * Convert document using API
  */
 async function convertDocumentAPI(buffer, inputExt, outputFormat, fileName) {
+    const localImage = await convertImageLocally(buffer, outputFormat);
+    if (localImage) return localImage;
+
+    const localDoc = await convertWithLibreOffice(buffer, inputExt, outputFormat);
+    if (localDoc) return localDoc;
+
     const formData = new FormData();
     formData.append('file', buffer, fileName || `file.${inputExt}`);
     formData.append('outputFormat', outputFormat);
