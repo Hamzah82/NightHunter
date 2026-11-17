@@ -27,6 +27,15 @@ Dikembangkan oleh [Hoznyx](https://github.com/Hamzah82).
 | `.update` | Git pull + restart (VPS/panel) |
 | `.jarvis <pesan>` | Tanya AI via kredensial sendiri |
 
+### Mode Bot
+
+- `.mode public` / `.mode private` — atur mode global (berlaku semua chat).
+- `.mode public local` / `.mode private local` — atur mode hanya untuk grup/chat tempat perintah dikirim.
+- `.mode reset` — hapus mode lokal chat tersebut, kembali mengikuti mode global.
+- `.mode status` — lihat mode global dan mode lokal chat saat ini.
+
+Contoh: bot global public, lalu `.mode private local` di satu grup membuat grup itu private tanpa mengubah grup lain.
+
 ## Cara Pasang
 
 ### Prasyarat

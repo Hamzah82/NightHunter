@@ -10,6 +10,7 @@ function readJsonSafe(path, fallback) {
 }
 
 const isOwnerOrSudo = require('../lib/isOwner');
+const { getChatMode } = require('../lib/chatMode');
 
 async function settingsCommand(sock, chatId, message) {
     try {
@@ -24,7 +25,7 @@ async function settingsCommand(sock, chatId, message) {
         const isGroup = chatId.endsWith('@g.us');
         const dataDir = './data';
 
-        const mode = readJsonSafe(`${dataDir}/messageCount.json`, { isPublic: true });
+        const chatMode = getChatMode(chatId);
         const autoStatus = readJsonSafe(`${dataDir}/autoStatus.json`, { enabled: false });
         const autoread = readJsonSafe(`${dataDir}/autoread.json`, { enabled: false });
         const autotyping = readJsonSafe(`${dataDir}/autotyping.json`, { enabled: false });
@@ -47,7 +48,10 @@ async function settingsCommand(sock, chatId, message) {
         const lines = [];
         lines.push('*BOT SETTINGS*');
         lines.push('');
-        lines.push(`• Mode: ${mode.isPublic ? 'Public' : 'Private'}`);
+        lines.push(`• Mode: ${chatMode.globalIsPublic ? 'Public' : 'Private'} (global)`);
+        if (chatMode.source === 'local') {
+            lines.push(`• Mode (this chat): ${chatMode.isPublic ? 'Public' : 'Private'} (local)`);
+        }
         lines.push(`• Auto Status: ${autoStatus.enabled ? 'ON' : 'OFF'}`);
         lines.push(`• Autoread: ${autoread.enabled ? 'ON' : 'OFF'}`);
         lines.push(`• Autotyping: ${autotyping.enabled ? 'ON' : 'OFF'}`);

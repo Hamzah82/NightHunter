@@ -35,6 +35,7 @@ setInterval(() => {
 const settings = require('./settings');
 require('./config.js');
 const { isBanned } = require('./lib/isBanned');
+const { getChatMode, setGlobalMode, setLocalMode, clearLocalMode } = require('./lib/chatMode');
 const { isSudo } = require('./lib/index');
 const isOwnerOrSudo = require('./lib/isOwner');
 const { autotypingCommand, isAutotypingEnabled, handleAutotypingForMessage, handleAutotypingForCommand, showTypingAfterCommand } = require('./commands/autotyping');
@@ -320,13 +321,12 @@ async function handleMessages(sock, messageUpdate, printLog) {
         if (userMessage.startsWith('.')) {
             console.log(`📝 Command used in ${isGroup ? 'group' : 'private'}: ${userMessage} [chat: ${chatId}]`);
         }
-        // Read bot mode once; don't early-return so moderation can still run in private mode
+        // Resolve mode for this chat: local override wins over global mode.
         let isPublic = true;
         try {
-            const data = JSON.parse(fs.readFileSync('./data/messageCount.json'));
-            if (typeof data.isPublic === 'boolean') isPublic = data.isPublic;
+            isPublic = getChatMode(chatId).isPublic;
         } catch (error) {
-            console.error('Error checking access mode:', error);
+            console.error('Error checking access mode:', error.message);
             // default isPublic=true on error
         }
         const isOwnerOrSudoCheck = message.key.fromMe || senderIsOwnerOrSudo;
@@ -580,54 +580,70 @@ async function handleMessages(sock, messageUpdate, printLog) {
             case userMessage === '.settings':
                 await settingsCommand(sock, chatId, message);
                 break;
-            case userMessage.startsWith('.mode'):
+            case userMessage.startsWith('.mode'): {
                 // Check if sender is the owner
                 if (!message.key.fromMe && !senderIsOwnerOrSudo) {
                     await sock.sendMessage(chatId, { text: 'Only bot owner can use this command!', ...channelInfo }, { quoted: message });
                     return;
                 }
-                // Read current data first
-                let data;
-                try {
-                    data = JSON.parse(fs.readFileSync('./data/messageCount.json'));
-                } catch (error) {
-                    console.error('Error reading access mode:', error);
-                    await sock.sendMessage(chatId, { text: 'Failed to read bot mode status', ...channelInfo });
+
+                const args = userMessage.split(/\s+/).slice(1).filter(Boolean);
+                const action = args.find(arg => arg === 'public' || arg === 'private');
+                const isLocal = args.includes('local') || args.includes('chat') || args.includes('here');
+                const isReset = args.includes('reset') || args.includes('default');
+                const chatMode = getChatMode(chatId);
+                const usage = 'Usage:\n.mode public|private - set global mode\n.mode public|private local - set mode for this chat only\n.mode reset - remove local mode for this chat';
+
+                if (args.length === 0 || args.includes('status')) {
+                    const localInfo = chatMode.source === 'local'
+                        ? `\nLocal mode for this chat: *${chatMode.isPublic ? 'public' : 'private'}*`
+                        : '\nLocal mode for this chat: *not set*';
+                    await sock.sendMessage(chatId, {
+                        text: `Global bot mode: *${chatMode.globalIsPublic ? 'public' : 'private'}*${localInfo}\n\n${usage}`,
+                        ...channelInfo
+                    }, { quoted: message });
                     return;
                 }
 
-                const action = userMessage.split(' ')[1]?.toLowerCase();
-                // If no argument provided, show current status
+                if (isReset) {
+                    if (!clearLocalMode(chatId)) {
+                        await sock.sendMessage(chatId, { text: 'Failed to reset local mode', ...channelInfo }, { quoted: message });
+                        return;
+                    }
+                    const updated = getChatMode(chatId);
+                    await sock.sendMessage(chatId, {
+                        text: `Local mode removed. This chat now follows global *${updated.globalIsPublic ? 'public' : 'private'}* mode.`,
+                        ...channelInfo
+                    }, { quoted: message });
+                    return;
+                }
+
                 if (!action) {
-                    const currentMode = data.isPublic ? 'public' : 'private';
-                    await sock.sendMessage(chatId, {
-                        text: `Current bot mode: *${currentMode}*\n\nUsage: .mode public/private\n\nExample:\n.mode public - Allow everyone to use bot\n.mode private - Restrict to owner only`,
-                        ...channelInfo
-                    }, { quoted: message });
+                    await sock.sendMessage(chatId, { text: usage, ...channelInfo }, { quoted: message });
                     return;
                 }
 
-                if (action !== 'public' && action !== 'private') {
-                    await sock.sendMessage(chatId, {
-                        text: 'Usage: .mode public/private\n\nExample:\n.mode public - Allow everyone to use bot\n.mode private - Restrict to owner only',
-                        ...channelInfo
-                    }, { quoted: message });
+                const targetIsPublic = action === 'public';
+                const success = isLocal
+                    ? setLocalMode(chatId, targetIsPublic)
+                    : setGlobalMode(targetIsPublic);
+
+                if (!success) {
+                    await sock.sendMessage(chatId, { text: 'Failed to update bot access mode', ...channelInfo }, { quoted: message });
                     return;
                 }
 
-                try {
-                    // Update access mode
-                    data.isPublic = action === 'public';
-
-                    // Save updated data
-                    fs.writeFileSync('./data/messageCount.json', JSON.stringify(data, null, 2));
-
-                    await sock.sendMessage(chatId, { text: `Bot is now in *${action}* mode`, ...channelInfo });
-                } catch (error) {
-                    console.error('Error updating access mode:', error);
-                    await sock.sendMessage(chatId, { text: 'Failed to update bot access mode', ...channelInfo });
+                if (isLocal) {
+                    const updated = getChatMode(chatId);
+                    await sock.sendMessage(chatId, {
+                        text: `Mode for this chat is now *${action}* (local override). Global mode remains *${updated.globalIsPublic ? 'public' : 'private'}*.`,
+                        ...channelInfo
+                    }, { quoted: message });
+                } else {
+                    await sock.sendMessage(chatId, { text: `Global bot mode is now *${action}*`, ...channelInfo }, { quoted: message });
                 }
                 break;
+            }
             case userMessage.startsWith('.anticall'):
                 if (!message.key.fromMe && !senderIsOwnerOrSudo) {
                     await sock.sendMessage(chatId, { text: 'Only owner/sudo can use anticall.' }, { quoted: message });
@@ -1409,11 +1425,10 @@ async function handleGroupParticipantUpdate(sock, update) {
         // Check if it's a group
         if (!id.endsWith('@g.us')) return;
 
-        // Respect bot mode: only announce promote/demote in public mode
+        // Respect effective mode for this group: local override wins over global
         let isPublic = true;
         try {
-            const modeData = JSON.parse(fs.readFileSync('./data/messageCount.json'));
-            if (typeof modeData.isPublic === 'boolean') isPublic = modeData.isPublic;
+            isPublic = getChatMode(id).isPublic;
         } catch (e) {
             // If reading fails, default to public behavior
         }

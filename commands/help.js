@@ -70,7 +70,8 @@ async function helpCommand(sock, chatId, message) {
 
 ╔═══════════════════╗
 🔒 *Owner Commands*:
-║ ➤ .mode <public/private>
+║ ➤ .mode <public/private> [local]
+║ ➤ .mode reset (hapus mode lokal chat ini)
 ║ ➤ .clearsession
 ║ ➤ .antidelete
 ║ ➤ .cleartmp
