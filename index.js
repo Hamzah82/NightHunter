@@ -325,42 +325,75 @@ async function startXeonBotInc() {
         }
     })
 
-    // Track recently-notified callers to avoid spamming messages
-    const antiCallNotified = new Set();
-
-    // Anticall handler: block callers when enabled
+    // Anticall: tolak panggilan, kirim alasan, blokir hanya setelah spam.
     XeonBotInc.ev.on('call', async (calls) => {
         try {
-            const { readState: readAnticallState } = require('./commands/anticall');
+            const {
+                readState: readAnticallState,
+                registerCall,
+                resetCall,
+                buildCallMessage,
+                buildProtectedMessage,
+                MAX_CALLS
+            } = require('./commands/anticall');
+
             const state = readAnticallState();
             if (!state.enabled) return;
+
+            const botNumber = String(XeonBotInc.user?.id || '').split('@')[0].split(':')[0];
+            const ownerNumber = String(require('./settings').ownerNumber || '').replace(/\D/g, '');
+
             for (const call of calls) {
+                // Hanya panggilan masuk baru; event ringing/timeout/reject diabaikan.
+                if ((call.status || 'offer') !== 'offer') continue;
+
                 const callerJid = call.from || call.peerJid || call.chatId;
                 if (!callerJid) continue;
-                try {
-                    // First: attempt to reject the call if supported
-                    try {
-                        if (typeof XeonBotInc.rejectCall === 'function' && call.id) {
-                            await XeonBotInc.rejectCall(call.id, callerJid);
-                        } else if (typeof XeonBotInc.sendCallOfferAck === 'function' && call.id) {
-                            await XeonBotInc.sendCallOfferAck(call.id, callerJid, 'reject');
-                        }
-                    } catch {}
+                if (callerJid.endsWith('@g.us') || callerJid.endsWith('@newsletter') || callerJid.endsWith('@broadcast')) continue;
 
-                    // Notify the caller only once within a short window
-                    if (!antiCallNotified.has(callerJid)) {
-                        antiCallNotified.add(callerJid);
-                        setTimeout(() => antiCallNotified.delete(callerJid), 60000);
-                        await XeonBotInc.sendMessage(callerJid, { text: '📵 Anticall is enabled. Your call was rejected and you will be blocked.' });
+                const callerNumber = callerJid.split('@')[0].split(':')[0];
+                const isProtected = (ownerNumber && callerNumber === ownerNumber) || (botNumber && callerNumber === botNumber);
+
+                // Tahap 1: tolak panggilan, jangan blokir dulu.
+                try {
+                    if (typeof XeonBotInc.rejectCall === 'function' && call.id) {
+                        await XeonBotInc.rejectCall(call.id, callerJid);
+                    } else if (typeof XeonBotInc.sendCallOfferAck === 'function' && call.id) {
+                        await XeonBotInc.sendCallOfferAck(call.id, callerJid, 'reject');
                     }
-                } catch {}
-                // Then: block after a short delay to ensure rejection and message are processed
-                setTimeout(async () => {
-                    try { await XeonBotInc.updateBlockStatus(callerJid, 'block'); } catch {}
-                }, 800);
+                } catch (error) {
+                    console.error('[anticall] gagal menolak panggilan:', error.message);
+                }
+
+                const count = isProtected ? 0 : registerCall(callerJid);
+                const blocked = !isProtected && count >= MAX_CALLS;
+
+                // Tahap 2: beri tahu pemanggil alasannya + peringatan.
+                try {
+                    await XeonBotInc.sendMessage(callerJid, {
+                        text: isProtected
+                            ? buildProtectedMessage(state.reason)
+                            : buildCallMessage({ reason: state.reason, count, max: MAX_CALLS, blocked })
+                    });
+                } catch (error) {
+                    console.error('[anticall] gagal mengirim notifikasi:', error.message);
+                }
+
+                // Tahap 3: blokir hanya saat batas spam tercapai.
+                if (blocked) {
+                    console.log(`[anticall] memblokir ${callerJid} setelah ${count} panggilan`);
+                    setTimeout(async () => {
+                        try {
+                            await XeonBotInc.updateBlockStatus(callerJid, 'block');
+                            resetCall(callerJid);
+                        } catch (error) {
+                            console.error('[anticall] gagal memblokir nomor:', error.message);
+                        }
+                    }, 800);
+                }
             }
-        } catch (e) {
-            // ignore
+        } catch (error) {
+            console.error('[anticall] handler error:', error.message);
         }
     });
 

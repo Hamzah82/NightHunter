@@ -87,7 +87,10 @@ async function helpCommand(sock, chatId, message) {
 ║ ➤ .autostatus react <on/off>
 ║ ➤ .autotyping <on/off>
 ║ ➤ .autoread <on/off>
-║ ➤ .anticall <on/off>
+║ ➤ .anticall on <alasan>
+║ ➤ .anticall off
+║ ➤ .anticall status
+║ ➤ .anticall reset
 ║ ➤ .pmblocker <on/off/status>
 ║ ➤ .pmblocker setmsg <text>
 ║ ➤ .setmention <reply to msg>
@@ -97,7 +100,6 @@ async function helpCommand(sock, chatId, message) {
 ║ ➤ .notes list
 ║ ➤ .notes del <judul>
 ║ ➤ .notes clear
-║ ➤ .anticall <on/off/status>
 ║ ➤ .blocklist
 ║ ➤ .unblock <nomor>
 ║ ➤ .sudo add/del/list <@user|nomor>
