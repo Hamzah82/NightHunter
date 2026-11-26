@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const sharp = require('sharp');
 const webp = require('node-webpmux');
 const settings = require('../settings');
+const { sendSoundStickerFromVideo } = require('../lib/soundSticker');
 
 const STICKER_SIZE = 512;
 
@@ -97,6 +98,26 @@ async function stickerCommand(sock, chatId, message) {
         const isVideo = mimetype.startsWith('video/') || (Number(mediaMessage.seconds) > 0 && !isGif);
         const animated = isGif || isVideo;
 
+        const tmpDir = path.join(process.cwd(), 'tmp');
+        if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+
+        // Videos with an audio track become sound stickers (sticker + audio).
+        if (isVideo) {
+            tempInput = path.join(tmpDir, `sticker_in_${Date.now()}`);
+            fs.writeFileSync(tempInput, mediaBuffer);
+
+            try {
+                const sent = await sendSoundStickerFromVideo(sock, chatId, {
+                    videoPath: tempInput,
+                    quoted: message
+                });
+
+                if (sent) return;
+            } catch (error) {
+                console.error('[STICKER] Sound sticker failed, falling back:', error.message);
+            }
+        }
+
         let webpBuffer = null;
 
         if (!isVideo) {
@@ -108,12 +129,12 @@ async function stickerCommand(sock, chatId, message) {
         }
 
         if (!webpBuffer) {
-            const tmpDir = path.join(process.cwd(), 'tmp');
-            if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+            if (!tempInput) {
+                tempInput = path.join(tmpDir, `sticker_in_${Date.now()}`);
+                fs.writeFileSync(tempInput, mediaBuffer);
+            }
 
-            tempInput = path.join(tmpDir, `sticker_in_${Date.now()}`);
             tempOutput = path.join(tmpDir, `sticker_out_${Date.now()}.webp`);
-            fs.writeFileSync(tempInput, mediaBuffer);
             await runFfmpeg(tempInput, tempOutput);
             webpBuffer = fs.readFileSync(tempOutput);
         }

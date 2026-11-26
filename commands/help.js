@@ -110,7 +110,8 @@ async function helpCommand(sock, chatId, message) {
 🎨 *Image/Sticker Commands*:
 ║ ➤ .blur <image>
 ║ ➤ .simage <reply to sticker>
-║ ➤ .sticker <reply to image>
+║ ➤ .sticker <reply to image/video>
+║    ↳ video with audio = sound sticker 🔊
 ║ ➤ .removebg / .rmbg / .nobg
 ║ ➤ .remini / .enhance / .upscale
 ║ ➤ .crop <reply to image>
