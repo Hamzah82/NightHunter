@@ -20,7 +20,9 @@ ensureRuntimeData()
 // (Message.StickerMessage.audioMessage) harus terbaca saat pesan masuk,
 // supaya .repack / .steal tidak menghapus audionya.
 try {
-    require('./lib/soundSticker').patchProtoForSoundStickers()
+    const { patchProtoForSoundStickers } = require('./lib/soundSticker')
+    const patched = patchProtoForSoundStickers()
+    console.log(`[SOUND-STICKER] Patch proto audio sticker: ${patched ? 'aktif' : 'GAGAL'}`)
 } catch (error) {
     console.error('[SOUND-STICKER] Gagal memasang patch proto:', error.message)
 }

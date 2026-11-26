@@ -3,6 +3,7 @@ const path = require('path');
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const webp = require('node-webpmux');
 const crypto = require('crypto');
+const store = require('../lib/lightweight_store');
 const { sendRepackedSticker, getStickerAudio } = require('../lib/soundSticker');
 
 async function repackCommand(sock, chatId, message, args) {
@@ -18,10 +19,17 @@ async function repackCommand(sock, chatId, message, args) {
         const packname = args.join(' ') || 'Night Hunter';
 
         try {
+            const contextInfo = message.message.extendedTextMessage.contextInfo;
+
             // Download the sticker
             const stickerBuffer = await downloadMediaMessage(
                 {
-                    key: message.message.extendedTextMessage.contextInfo.stanzaId,
+                    key: {
+                        remoteJid: chatId,
+                        fromMe: false,
+                        id: contextInfo.stanzaId,
+                        participant: contextInfo.participant
+                    },
                     message: quotedMessage,
                     messageType: 'stickerMessage'
                 },
@@ -62,7 +70,26 @@ async function repackCommand(sock, chatId, message, args) {
             const finalBuffer = await img.save(null);
 
             // Sound sticker: audio ikut dipertahankan (field 26), bukan dihapus.
-            const audioMessage = getStickerAudio(quotedMessage);
+            // Quoted message dari WhatsApp kadang tidak membawa audio, jadi
+            // cadangannya diambil dari store pesan yang diterima bot.
+            const audioFromQuote = getStickerAudio(quotedMessage);
+            let audioMessage = audioFromQuote;
+
+            if (!audioMessage && contextInfo?.stanzaId) {
+                try {
+                    const stored = await store.loadMessage(chatId, contextInfo.stanzaId);
+                    audioMessage = getStickerAudio(stored?.message);
+                    if (audioMessage) {
+                        console.log('[REPACK] Audio diambil dari store pesan.');
+                    }
+                } catch (storeError) {
+                    console.error('[REPACK] Gagal baca store:', storeError.message);
+                }
+            }
+
+            if (!audioMessage) {
+                console.log('[REPACK] Sticker tanpa audio. Field stickerMessage:', Object.keys(quotedMessage.stickerMessage || {}).join(', '));
+            }
 
             try {
                 await sendRepackedSticker(sock, chatId, {
