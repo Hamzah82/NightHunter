@@ -99,6 +99,7 @@ GITHUB_TOKEN=
 - Sumber commit dicoba berurutan: `git fetch` → `git ls-remote` → GitHub API (hanya jika `GITHUB_TOKEN` diisi) → Atom feed `commits/main.atom`. Tanpa token, Atom feed dipakai supaya tidak kena limit API anonim 60 request/jam yang sering habis di IP panel bersama.
 - Di instalasi ZIP/panel tanpa `.git`, pengecekan pertama mengirim info commit terbaru satu kali; setelah itu hanya commit baru yang dikirim.
 - `.checkupdate` untuk cek manual (owner/sudo), `.checkupdate test` untuk mengirim pesan tes ke target notifikasi.
+- `.update` (owner/sudo) menarik versi terbaru, mem-backup `data/`, menjalankan `npm install` otomatis (fallback `--legacy-peer-deps` bila bentrok peer dependency), lalu restart bot. Mode ZIP juga menjalankan `npm install`.
 
 ### Catatan Dependensi
 

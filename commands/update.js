@@ -285,8 +285,32 @@ async function updateViaZip(zipOverride) {
     return { copiedFiles: copied };
 }
 
-async function restartProcess() {
-    // Restart only this process when PM2 exposes its id; `pm2 restart all`
+const NPM_INSTALL_TIMEOUT = 300000;
+
+/**
+ * Sinkronkan dependency setelah update.
+ * Percobaan pertama pakai `npm install` biasa; kalau gagal karena konflik peer
+ * dependency (umum pada Baileys rc + override jimp), ulangi dengan
+ * `--legacy-peer-deps` seperti script `npm run install:panel`.
+ */
+async function installDependencies() {
+    try {
+        await run('npm install --no-audit --no-fund', NPM_INSTALL_TIMEOUT);
+        return { ok: true, legacyPeerDeps: false };
+    } catch (error) {
+        console.error('[update] npm install gagal:', String(error.message || error).split('\n')[0]);
+    }
+
+    try {
+        await run('npm install --no-audit --no-fund --legacy-peer-deps', NPM_INSTALL_TIMEOUT);
+        return { ok: true, legacyPeerDeps: true };
+    } catch (error) {
+        console.error('[update] npm install --legacy-peer-deps gagal:', String(error.message || error).split('\n')[0]);
+        return { ok: false, legacyPeerDeps: false };
+    }
+}
+
+async function restartProcess() {    // Restart only this process when PM2 exposes its id; `pm2 restart all`
     // would also bounce unrelated apps hosted on the same panel.
     if (process.env.pm_id) {
         try {
@@ -317,24 +341,36 @@ async function updateCommand(sock, chatId, message, zipOverride) {
         await sock.sendMessage(chatId, { text: '🔄 *Update bot dimulai...*' }, { quoted: message });
 
         let summary;
+        let changed = true;
+
         if (await hasGitRepo()) {
             const { newRev, alreadyUpToDate, commits, restored } = await updateViaGit();
+            changed = !alreadyUpToDate;
             summary = alreadyUpToDate
                 ? `✅ Sudah versi terbaru (${newRev.slice(0, 7)}).`
                 : `✅ Diperbarui ke ${newRev.slice(0, 7)}.\n\n${commits || '(tanpa ringkasan commit)'}`;
             if (restored > 0) {
                 summary += `\n\n💾 ${restored} file setting di data/ dipulihkan.`;
             }
-
-            try {
-                await run('npm install --no-audit --no-fund', 300000);
-            } catch (npmError) {
-                console.error('[update] npm install gagal:', npmError.message);
-                summary += '\n\n⚠️ npm install gagal, cek log panel.';
-            }
         } else {
             const { copiedFiles } = await updateViaZip(zipOverride);
             summary = `✅ Update ZIP selesai (${copiedFiles.length} file).`;
+        }
+
+        // npm install juga dijalankan pada mode ZIP, dan saat node_modules belum ada.
+        if (changed || !fs.existsSync(path.join(ROOT, 'node_modules'))) {
+            await sock.sendMessage(chatId, {
+                text: '📦 Menjalankan npm install... (bisa 1-3 menit)'
+            }, { quoted: message });
+
+            const install = await installDependencies();
+            if (!install.ok) {
+                summary += '\n\n⚠️ npm install gagal — jalankan manual di panel (`npm install --legacy-peer-deps`).';
+            } else if (install.legacyPeerDeps) {
+                summary += '\n\n📦 Dependency terpasang (`--legacy-peer-deps`).';
+            } else {
+                summary += '\n\n📦 Dependency terpasang.';
+            }
         }
 
         await sock.sendMessage(chatId, { text: `${summary}\n\n♻️ Restart bot...` }, { quoted: message });
