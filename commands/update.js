@@ -341,11 +341,11 @@ async function updateCommand(sock, chatId, message, zipOverride) {
         await sock.sendMessage(chatId, { text: '🔄 *Update bot dimulai...*' }, { quoted: message });
 
         let summary;
-        let changed = true;
+        let updateCodeChanged = false;
 
         if (await hasGitRepo()) {
-            const { newRev, alreadyUpToDate, commits, restored } = await updateViaGit();
-            changed = !alreadyUpToDate;
+            const { newRev, alreadyUpToDate, commits, files, restored } = await updateViaGit();
+            updateCodeChanged = !alreadyUpToDate && /commands\/update\.js/.test(files || '');
             summary = alreadyUpToDate
                 ? `✅ Sudah versi terbaru (${newRev.slice(0, 7)}).`
                 : `✅ Diperbarui ke ${newRev.slice(0, 7)}.\n\n${commits || '(tanpa ringkasan commit)'}`;
@@ -355,22 +355,26 @@ async function updateCommand(sock, chatId, message, zipOverride) {
         } else {
             const { copiedFiles } = await updateViaZip(zipOverride);
             summary = `✅ Update ZIP selesai (${copiedFiles.length} file).`;
+            updateCodeChanged = copiedFiles.includes('commands/update.js');
         }
 
-        // npm install juga dijalankan pada mode ZIP, dan saat node_modules belum ada.
-        if (changed || !fs.existsSync(path.join(ROOT, 'node_modules'))) {
-            await sock.sendMessage(chatId, {
-                text: '📦 Menjalankan npm install... (bisa 1-3 menit)'
-            }, { quoted: message });
+        // npm install selalu dijalankan (git & ZIP) supaya dependency baru
+        // langsung terpasang tanpa perlu perintah tambahan di panel.
+        await sock.sendMessage(chatId, {
+            text: '📦 Menjalankan npm install... (bisa 1-3 menit)'
+        }, { quoted: message });
 
-            const install = await installDependencies();
-            if (!install.ok) {
-                summary += '\n\n⚠️ npm install gagal — jalankan manual di panel (`npm install --legacy-peer-deps`).';
-            } else if (install.legacyPeerDeps) {
-                summary += '\n\n📦 Dependency terpasang (`--legacy-peer-deps`).';
-            } else {
-                summary += '\n\n📦 Dependency terpasang.';
-            }
+        const install = await installDependencies();
+        if (!install.ok) {
+            summary += '\n\n⚠️ npm install gagal — jalankan manual di panel (`npm install --legacy-peer-deps`).';
+        } else if (install.legacyPeerDeps) {
+            summary += '\n\n📦 Dependency terpasang (`--legacy-peer-deps`).';
+        } else {
+            summary += '\n\n📦 Dependency terpasang.';
+        }
+
+        if (updateCodeChanged) {
+            summary += '\n\nℹ️ Perubahan pada perintah .update baru aktif setelah restart ini.';
         }
 
         await sock.sendMessage(chatId, { text: `${summary}\n\n♻️ Restart bot...` }, { quoted: message });
