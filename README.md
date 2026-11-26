@@ -111,12 +111,24 @@ GITHUB_TOKEN=
 ```
 data/
 ├── aiDisabled.json     # Daftar nomor nonaktif CS AI
+├── messageCount.json   # Mode global (isPublic) + hitungan pesan grup
+├── chatMode.json       # Override mode per chat
+├── antidelete.json     # Setting antidelete
+├── anticall.json       # Setting anticall + riwayat panggilan
+├── *.json              # Setting lain (autoread, autotyping, banned, premium, dll)
+├── catatan/            # Catatan per pengguna
 └── sesiAI/             # Session CS AI per nomor
 commands/               # Semua perintah bot
 lib/                    # Helper & utilities
 assets/                 # Gambar & aset
 session/                # Session WhatsApp (jangan di-commit)
 ```
+
+### Penyimpanan Setting
+
+- Semua setting (`.mode`, `.antidelete`, `.anticall`, `.autoread`, `.autotyping`, `.autostatus`, banned/premium, dll) disimpan permanen di `data/*.json` dan **tidak di-track git**, jadi tidak ikut ter-reset oleh `git pull`, `git reset --hard`, atau `.update`.
+- File yang belum ada dibuat otomatis saat boot oleh `lib/runtimeData.js`; file yang korup di-backup ke `<nama>.json.broken-<timestamp>` lalu dibuat ulang dengan nilai default.
+- Jangan menghapus folder `data/` saat update/deploy, dan jangan pakai `git clean -fdx` (tanpa `-e data`).
 
 ## Catatan
 

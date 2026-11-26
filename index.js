@@ -10,6 +10,12 @@
  * - Pair Code implementation inspired by TechGod143 & DGXEON
  */
 require('./settings')
+
+// Siapkan file state di data/ sebelum modul lain membacanya, supaya setting
+// (mode public/private, antidelete, anticall, dll) tetap ada setelah restart.
+const { ensureRuntimeData } = require('./lib/runtimeData')
+ensureRuntimeData()
+
 const { Boom } = require('@hapi/boom')
 const fs = require('fs')
 const chalk = require('chalk')

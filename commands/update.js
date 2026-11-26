@@ -27,6 +27,68 @@ async function hasGitRepo() {
     }
 }
 
+// Entri di data/ yang menyimpan setting (bukan media sementara).
+const RUNTIME_DATA_DIRS = ['catatan', 'sesiAI'];
+
+function copyDirRecursive(srcDir, destDir) {
+    fs.mkdirSync(destDir, { recursive: true });
+    for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
+        const src = path.join(srcDir, entry.name);
+        const dest = path.join(destDir, entry.name);
+        if (entry.isDirectory()) copyDirRecursive(src, dest);
+        else fs.copyFileSync(src, dest);
+    }
+}
+
+/**
+ * Backup setting di data/ sebelum `git reset --hard`. Reset ke commit yang
+ * tidak lagi memuat file-file ini akan menghapusnya dari working tree, jadi
+ * backup ini yang menyelamatkan mode/antidelete/anticall milik user.
+ */
+function backupRuntimeData(backupDir) {
+    const dataDir = path.join(ROOT, 'data');
+    if (!fs.existsSync(dataDir)) return false;
+
+    fs.mkdirSync(backupDir, { recursive: true });
+    let copied = 0;
+
+    for (const entry of fs.readdirSync(dataDir, { withFileTypes: true })) {
+        const src = path.join(dataDir, entry.name);
+        if (entry.isFile() && entry.name.endsWith('.json')) {
+            fs.copyFileSync(src, path.join(backupDir, entry.name));
+            copied++;
+        } else if (entry.isDirectory() && RUNTIME_DATA_DIRS.includes(entry.name)) {
+            copyDirRecursive(src, path.join(backupDir, entry.name));
+            copied++;
+        }
+    }
+
+    return copied > 0;
+}
+
+function restoreRuntimeData(srcDir, destDir) {
+    if (!fs.existsSync(srcDir)) return 0;
+
+    let restored = 0;
+    for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
+        const src = path.join(srcDir, entry.name);
+        const dest = path.join(destDir, entry.name);
+
+        if (entry.isDirectory()) {
+            restored += restoreRuntimeData(src, dest);
+            continue;
+        }
+
+        // Selalu tulis ulang: backup diambil tepat sebelum reset, jadi isinya
+        // adalah setting user yang paling baru.
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        fs.copyFileSync(src, dest);
+        restored++;
+    }
+
+    return restored;
+}
+
 async function updateViaGit() {
     const oldRev = (await run('git rev-parse HEAD', 10000).catch(() => 'unknown')).trim();
     await run('git fetch --all --prune', 60000);
@@ -44,11 +106,33 @@ async function updateViaGit() {
         ? ''
         : await run(`git diff --name-status ${oldRev} ${newRev}`, 15000).catch(() => '');
 
-    await run(`git reset --hard ${newRev}`, 30000);
-    // -e melindungi aset runtime yang tidak di-track git (mis. hasil .setmention).
-    await run("git clean -fd -e 'assets/mention_custom.*'", 30000);
+    // Backup setting dulu: reset ke commit yang tidak lagi memuat file state
+    // akan menghapus data/*.json dari working tree.
+    const backupDir = path.join(ROOT, 'tmp', `data-backup-${Date.now()}`);
+    let backedUp = false;
+    try {
+        backedUp = backupRuntimeData(backupDir);
+    } catch (error) {
+        console.error('[update] gagal backup data/:', error.message);
+    }
 
-    return { oldRev, newRev, alreadyUpToDate, commits, files };
+    await run(`git reset --hard ${newRev}`, 30000);
+    // -e melindungi aset/state runtime yang tidak di-track git: hasil .setmention
+    // dan seluruh setting di data/ (mode, antidelete, anticall, dst) tidak boleh
+    // ikut terhapus saat update.
+    await run("git clean -fd -e 'assets/mention_custom.*' -e 'data'", 30000);
+
+    let restored = 0;
+    if (backedUp) {
+        try {
+            restored = restoreRuntimeData(backupDir, path.join(ROOT, 'data'));
+        } catch (error) {
+            console.error('[update] gagal restore data/:', error.message);
+        }
+        try { fs.rmSync(backupDir, { recursive: true, force: true }); } catch {}
+    }
+
+    return { oldRev, newRev, alreadyUpToDate, commits, files, restored };
 }
 
 function downloadFile(url, dest, visited = new Set()) {
@@ -234,10 +318,13 @@ async function updateCommand(sock, chatId, message, zipOverride) {
 
         let summary;
         if (await hasGitRepo()) {
-            const { newRev, alreadyUpToDate, commits } = await updateViaGit();
+            const { newRev, alreadyUpToDate, commits, restored } = await updateViaGit();
             summary = alreadyUpToDate
                 ? `✅ Sudah versi terbaru (${newRev.slice(0, 7)}).`
                 : `✅ Diperbarui ke ${newRev.slice(0, 7)}.\n\n${commits || '(tanpa ringkasan commit)'}`;
+            if (restored > 0) {
+                summary += `\n\n💾 ${restored} file setting di data/ dipulihkan.`;
+            }
 
             try {
                 await run('npm install --no-audit --no-fund', 300000);
