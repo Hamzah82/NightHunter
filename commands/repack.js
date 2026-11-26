@@ -3,6 +3,7 @@ const path = require('path');
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const webp = require('node-webpmux');
 const crypto = require('crypto');
+const { sendRepackedSticker, getStickerAudio } = require('../lib/soundSticker');
 
 async function repackCommand(sock, chatId, message, args) {
     try {
@@ -60,12 +61,23 @@ async function repackCommand(sock, chatId, message, args) {
             // Get the final buffer with metadata
             const finalBuffer = await img.save(null);
 
-            // Send the sticker
-            await sock.sendMessage(chatId, {
-                sticker: finalBuffer
-            }, {
-                quoted: message
-            });
+            // Sound sticker: audio ikut dipertahankan (field 26), bukan dihapus.
+            const audioMessage = getStickerAudio(quotedMessage);
+
+            try {
+                await sendRepackedSticker(sock, chatId, {
+                    stickerBuffer: finalBuffer,
+                    audioMessage,
+                    quoted: message
+                });
+            } catch (sendError) {
+                console.error('[REPACK] Gagal kirim lewat relay, fallback sendMessage:', sendError.message);
+                await sock.sendMessage(chatId, {
+                    sticker: finalBuffer
+                }, {
+                    quoted: message
+                });
+            }
 
         } catch (error) {
             console.error('Sticker processing error:', error);

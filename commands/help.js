@@ -118,6 +118,7 @@ async function helpCommand(sock, chatId, message) {
 ║ ➤ .tgsticker / .stickertelegram / .telesticker <Link>
 ║ ➤ .meme
 ║ ➤ .repack / .steal <packname>
+║    ↳ audio sound sticker ikut dipertahankan 🔊
 ║ ➤ .emojimix / .emix <emj1>+<emj2>
 ║ ➤ .igs <insta link>
 ║ ➤ .igsc <insta link>

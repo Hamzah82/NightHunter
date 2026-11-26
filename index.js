@@ -16,6 +16,15 @@ require('./settings')
 const { ensureRuntimeData } = require('./lib/runtimeData')
 ensureRuntimeData()
 
+// Patch WAProto sebelum socket dibuat: field audio pada sound sticker
+// (Message.StickerMessage.audioMessage) harus terbaca saat pesan masuk,
+// supaya .repack / .steal tidak menghapus audionya.
+try {
+    require('./lib/soundSticker').patchProtoForSoundStickers()
+} catch (error) {
+    console.error('[SOUND-STICKER] Gagal memasang patch proto:', error.message)
+}
+
 const { Boom } = require('@hapi/boom')
 const fs = require('fs')
 const chalk = require('chalk')
